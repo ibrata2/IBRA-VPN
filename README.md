@@ -26,3 +26,8 @@ npm run dist        # يبني dist/IBRA-VPN-Setup-x.y.z.exe
 النشر: ادفع وسم مثل `v1.0.0` وسير العمل `.github/workflows/release.yml` يبني ملف التنصيب وينشره في **Releases**.
 
 المحرك: [sing-box](https://sing-box.sagernet.org) (GPLv3) يُنزّل تلقائياً عند البناء ويُثبّت كملف منفصل.
+
+## Android
+نسخة الأندرويد مبنية على [v2rayNG](https://github.com/2dust/v2rayNG) (GPLv3) مع هوية IBRA VPN —
+`android/rebrand.py` يطبّق الاسم والأيقونة والألوان وقسم "حول" وقوائم السيرفرات المجانية،
+و `.github/workflows/android.yml` يبني ملفات APK ويضيفها لنفس إصدار الويندوز.

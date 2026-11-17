@@ -1,0 +1,96 @@
+name: Android APK
+
+# Builds IBRA VPN for Android (based on v2rayNG, GPLv3) and attaches the APKs
+# to the release of the same version as the Windows app (package.json).
+on:
+  workflow_dispatch:
+  push:
+    paths: ['android/**', '.github/workflows/android.yml']
+
+permissions:
+  contents: write
+
+env:
+  V2RAYNG_TAG: '2.4.0'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read version
+        run: echo "APP_VERSION=$(node -p "require('./package.json').version")" >> $GITHUB_ENV
+
+      - name: Checkout v2rayNG ${{ env.V2RAYNG_TAG }}
+        uses: actions/checkout@v4
+        with:
+          repository: 2dust/v2rayNG
+          ref: ${{ env.V2RAYNG_TAG }}
+          path: v2rayng
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Apply IBRA VPN branding
+        run: python3 android/rebrand.py v2rayng "$APP_VERSION"
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          log-accepted-android-sdk-licenses: false
+          packages: 'platforms;android-37.0 build-tools;37.0.0 platform-tools'
+
+      - name: Install NDK
+        run: |
+          echo "y" | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --channel=0 --install "ndk;30.0.16248370" > /dev/null
+          echo "NDK_HOME=$ANDROID_HOME/ndk/30.0.16248370" >> $GITHUB_ENV
+          sed -i '10i\
+          \
+              ndkVersion = "30.0.16248370"' v2rayng/V2rayNG/app/build.gradle.kts
+
+      - name: Build libhevtun
+        working-directory: v2rayng
+        run: bash compile-hevtun.sh && cp -r libs V2rayNG/app
+
+      - name: Download libv2ray
+        working-directory: v2rayng
+        run: |
+          TAG=$(git -C AndroidLibXrayLite describe --tags --abbrev=0)
+          echo "AndroidLibXrayLite $TAG"
+          mkdir -p V2rayNG/app/libs
+          curl -fsSL -o V2rayNG/app/libs/libv2ray.aar "https://github.com/2dust/AndroidLibXrayLite/releases/download/$TAG/libv2ray.aar"
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Build APK
+        working-directory: v2rayng/V2rayNG
+        run: |
+          echo "sdk.dir=${ANDROID_HOME}" > local.properties
+          chmod 755 gradlew
+          ./gradlew licenseFdroidReleaseReport || true
+          ./gradlew assemblePlaystoreRelease \
+            -Pandroid.injected.signing.store.file=$GITHUB_WORKSPACE/android/ibra-vpn.jks \
+            -Pandroid.injected.signing.store.password=ibravpn2026 \
+            -Pandroid.injected.signing.key.alias=ibravpn \
+            -Pandroid.injected.signing.key.password=ibravpn2026
+
+      - name: Collect APKs
+        run: |
+          mkdir -p out
+          find v2rayng/V2rayNG/app/build/outputs/apk -name 'IBRA-VPN-Android-*.apk' ! -name '*fdroid*' -exec cp {} out/ \;
+          ls -la out
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ibra-vpn-android
+          path: out/*.apk
+
+      - name: Attach to release v${{ env.APP_VERSION }}
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ env.APP_VERSION }}
+          name: IBRA VPN ${{ env.APP_VERSION }}
+          files: out/*.apk
