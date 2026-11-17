@@ -1,0 +1,112 @@
+name: iOS IPA
+
+# Builds IBRA VPN for iPhone (based on sing-box-for-apple, GPLv3) as an unsigned IPA:
+# fake-signed with ldid + VPN entitlements so TrollStore can install it, or re-sign it
+# with a paid Apple developer account. Attached to the release of the same version.
+on:
+  workflow_dispatch:
+  push:
+    paths: ['ios/**', '.github/workflows/ios.yml']
+
+permissions:
+  contents: write
+
+env:
+  SINGBOX_TAG: v1.14.4
+  GO_VERSION: '1.26.10'
+
+jobs:
+  build:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read version
+        run: echo "APP_VERSION=$(node -p "require('./package.json').version")" >> $GITHUB_ENV
+
+      - name: Checkout sing-box ${{ env.SINGBOX_TAG }} (with Apple client)
+        run: |
+          git clone --depth 1 --branch "$SINGBOX_TAG" https://github.com/SagerNet/sing-box sb
+          cd sb && git submodule update --init --depth 1 clients/apple
+
+      - name: Select newest Xcode
+        run: |
+          ls -d /Applications/Xcode*.app
+          X=$(ls -d /Applications/Xcode_*.app | sort -V | tail -1)
+          sudo xcode-select -s "$X"
+          xcodebuild -version
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: false
+
+      - name: Build Libbox (iOS)
+        working-directory: sb
+        env:
+          GOTOOLCHAIN: local
+        run: |
+          .github/patch_go_for_ios.sh
+          make lib_install
+          export PATH="$PATH:$(go env GOPATH)/bin"
+          go run ./cmd/internal/build_libbox -target apple -platform ios/arm64
+          mkdir -p slice && mv Libbox.xcframework slice/
+          go run ./cmd/internal/merge_apple_xcframework -output clients/apple/Libbox.xcframework slice/Libbox.xcframework
+
+      - name: Apply IBRA VPN branding
+        run: python3 ios/rebrand.py sb/clients/apple ent
+
+      - name: Build app (unsigned)
+        working-directory: sb/clients/apple
+        env:
+          DISABLE_SWIFTLINT: '1'
+        run: |
+          defaults write com.apple.dt.Xcode IDESkipPackagePluginFingerprintValidatation -bool YES
+          defaults write com.apple.dt.Xcode IDESkipMacroFingerprintValidation -bool YES
+          xcodebuild build -skipPackagePluginValidation -skipMacroValidation \
+            -scheme SFI -configuration Release -destination 'generic/platform=iOS' \
+            -derivedDataPath "$RUNNER_TEMP/dd" \
+            BASE_PACKAGE_IDENTIFIER=com.ibraprogram.ibravpn \
+            APP_GROUP_IDENTIFIER=group.com.ibraprogram.ibravpn \
+            MARKETING_VERSION="$APP_VERSION" CURRENT_PROJECT_VERSION=1 \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" ENABLE_BITCODE=NO \
+            | tail -40
+          ls "$RUNNER_TEMP/dd/Build/Products/Release-iphoneos/"
+
+      - name: Sign with entitlements and package IPA
+        run: |
+          brew install ldid >/dev/null
+          APP=$(ls -d "$RUNNER_TEMP"/dd/Build/Products/Release-iphoneos/*.app | head -1)
+          echo "app: $APP"
+          rm -rf Payload && mkdir Payload && cp -R "$APP" "Payload/IBRA VPN.app"
+          A="Payload/IBRA VPN.app"
+          /usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName IBRA VPN" "$A/Info.plist" 2>/dev/null || /usr/libexec/PlistBuddy -c "Add :CFBundleDisplayName string IBRA VPN" "$A/Info.plist"
+          for ex in "$A"/PlugIns/*.appex "$A"/Extensions/*.appex; do
+            [ -d "$ex" ] || continue
+            bin="$ex/$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$ex/Info.plist")"
+            case "$(basename "$ex")" in
+              Extension.appex) ldid -Sent/Extension.plist "$bin" ;;
+              *) ldid -Sent/Other.plist "$bin" ;;
+            esac
+            echo "signed $(basename "$ex")"
+          done
+          find "$A/Frameworks" -name '*.dylib' -o -name '*.framework' 2>/dev/null | while read f; do
+            if [ -d "$f" ]; then b="$f/$(basename "$f" .framework)"; else b="$f"; fi
+            [ -f "$b" ] && ldid -S "$b" || true
+          done
+          ldid -Sent/App.plist "$A/$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$A/Info.plist")"
+          mkdir -p out
+          zip -qry "out/IBRA-VPN-iOS-$APP_VERSION.ipa" Payload
+          ls -la out
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ibra-vpn-ios
+          path: out/*.ipa
+
+      - name: Attach to release v${{ env.APP_VERSION }}
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ env.APP_VERSION }}
+          name: IBRA VPN ${{ env.APP_VERSION }}
+          files: out/*.ipa
