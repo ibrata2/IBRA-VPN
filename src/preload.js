@@ -22,6 +22,8 @@ contextBridge.exposeInMainWorld('vpn', {
   sort: () => invoke('sort'),
   best: () => invoke('best'),
   test: ids => invoke('test', ids),
+  fetchFree: () => invoke('fetch-free'),
+  removeFree: () => invoke('remove-free'),
   subUpdate: id => invoke('sub-update', id),
   subRemove: id => invoke('sub-remove', id),
   openTelegram: id => invoke('open-telegram', id),

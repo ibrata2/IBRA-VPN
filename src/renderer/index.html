@@ -34,6 +34,7 @@
       <div class="status" id="statusText"></div>
       <div class="timer" id="timer">00:00:00</div>
       <div class="error" id="errorBox" hidden></div>
+      <button class="primary big home-fetch" id="homeFetch" hidden><svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"/></svg><span data-i="fetchFree"></span></button>
       <div class="warn" id="warnBox" hidden></div>
 
       <button class="card server-card" id="serverCard">
@@ -81,6 +82,11 @@
         <small class="hint" data-i="addHint"></small>
       </div>
 
+      <div class="fetch-box">
+        <button class="primary big" id="fetchBtn"><svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"/></svg><span data-i="fetchFree"></span></button>
+        <div class="fetch-prog" id="fetchProg" hidden><div class="bar"><i id="fetchBar"></i></div><small id="fetchText"></small></div>
+        <small class="hint" data-i="fetchHint"></small>
+      </div>
       <div class="tg-list" id="tgList"></div>
       <div class="subs" id="subsList"></div>
 
@@ -89,6 +95,7 @@
         <button class="ghost small" id="sortBtn" data-i="sortPing"></button>
         <button class="ghost small" id="bestBtn" data-i="pickBest"></button>
         <button class="ghost small danger" id="deadBtn" data-i="removeDead"></button>
+        <button class="ghost small danger" id="freeDelBtn" data-i="removeFree"></button>
       </div>
       <div class="list" id="serverList"></div>
       <div class="empty" id="emptyList" data-i="emptyList"></div>

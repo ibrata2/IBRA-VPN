@@ -129,6 +129,7 @@ function renderHome() {
   }
   $('#ipRefresh').hidden = st.status !== 'connected';
 
+  $('#homeFetch').hidden = !(S.engine === 'server' && !S.servers.some(x => x.protocol !== 'mtproto') && st.status === 'disconnected');
   setSeg('#modeSeg', S.settings.mode);
   setSeg('#routeSeg', S.settings.routing);
   $('#routeSeg').classList.toggle('disabled', S.engine === 'bypass');
@@ -170,8 +171,9 @@ function renderServers() {
   const vpnList = S.servers.filter(s => s.protocol !== 'mtproto');
   $('#tgList').innerHTML = tg.length ? `<h3>${esc(T('tgProxies'))}</h3><small class="hint tg-hint">${esc(T('tgHint'))}</small>` + tg.map(s => `
     <div class="srv mt" data-id="${esc(s.id)}">
-      <span class="badge tgb">TG</span>
+      <span class="badge tgb">TG</span>${s.free ? `<span class="badge free">${esc(T('freeTag'))}</span>` : ''}
       <div class="grow"><b>${esc(s.name)}</b><small>${esc(s.outbound.server)}:${s.outbound.server_port}</small></div>
+      <span class="p">${pingHtml(pings[s.id] ?? s.ping)}</span>
       <button class="primary small" data-act="tg">${esc(T('connectTg'))}</button>
       <button class="icon more" data-act="menu">⋮</button>
     </div>`).join('') : '';
@@ -180,13 +182,14 @@ function renderServers() {
     const ms = pings[s.id] ?? s.ping;
     return `<div class="srv ${sel ? 'sel' : ''} ${s.protocol === 'mtproto' ? 'mt' : ''}" data-id="${esc(s.id)}">
       <i class="radio"></i>
-      <span class="badge">${esc(PROTO[s.protocol] || s.protocol)}</span>
+      <span class="badge">${esc(PROTO[s.protocol] || s.protocol)}</span>${s.free ? `<span class="badge free">${esc(T('freeTag'))}</span>` : ''}
       <div class="grow"><b>${esc(s.name)}</b><small>${esc(s.outbound.server)}:${s.outbound.server_port}</small></div>
       <span class="p">${pingHtml(ms)}</span>
       <button class="icon more" data-act="menu">⋮</button>
     </div>`;
   }).join('');
   $('#emptyList').hidden = vpnList.length > 0;
+  $('#freeDelBtn').hidden = !S.servers.some(x => x.free);
 }
 
 function renderSettings() {
@@ -244,6 +247,30 @@ $('#addBtn').onclick = async () => {
     toast(errText(m), 'bad');
   } finally { btn.disabled = false; }
 };
+async function fetchFree() {
+  go('servers');
+  const b = $('#fetchBtn'); b.disabled = true; $('#homeFetch').disabled = true;
+  $('#fetchProg').hidden = false; $('#fetchBar').style.width = '3%'; $('#fetchText').textContent = T('fetchDownloading');
+  try {
+    const r = await vpn.fetchFree();
+    if (r.busy) return;
+    S = r.store; render();
+    toast(T('fetchDone')(r.vpn, r.tg), r.vpn + r.tg ? 'ok' : 'bad');
+  } catch (e) {
+    toast(T('err').FETCH_FAILED, 'bad');
+  } finally {
+    b.disabled = false; $('#homeFetch').disabled = false;
+    setTimeout(() => ($('#fetchProg').hidden = true), 1500);
+  }
+}
+$('#fetchBtn').onclick = fetchFree;
+$('#homeFetch').onclick = fetchFree;
+$('#freeDelBtn').onclick = async () => { S = await vpn.removeFree(); render(); };
+vpn.on('fetch-progress', p => {
+  if (p.stage === 'download') { $('#fetchText').textContent = T('fetchDownloading'); $('#fetchBar').style.width = '6%'; }
+  else if (p.stage === 'test') { const pc = p.total ? Math.round(p.done / p.total * 100) : 0; $('#fetchBar').style.width = Math.max(6, pc) + '%'; $('#fetchText').textContent = T('fetchTesting')(p.done, p.total, p.alive); }
+  else if (p.stage === 'done') { $('#fetchBar').style.width = '100%'; $('#fetchText').textContent = T('fetchDone')(p.vpn, p.tg); }
+});
 $('#testAll').onclick = () => { toast(T('testing')); vpn.test(); };
 $('#sortBtn').onclick = async () => { S = await vpn.sort(); render(); };
 $('#bestBtn').onclick = async () => { S = await vpn.best(); render(); go('home'); };

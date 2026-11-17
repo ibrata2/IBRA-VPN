@@ -385,41 +385,163 @@ function notify(body) {
 
 // ---------------- latency test ----------------
 let testing = false;
-async function testServers(ids) {
-  if (testing) return;
-  testing = true;
-  const list = (ids && ids.length ? store.servers.filter(s => ids.includes(s.id)) : store.servers).filter(s => s.protocol !== 'mtproto');
-  if (store.engine === 'warp' && store.warpAccount && (!ids || ids.includes('warp'))) list.push(warp.toServer(store.warpAccount, store.warpEndpoint));
-  if (!list.length) { testing = false; return; }
-  for (const s of list) send('ping', { id: s.id, ms: -2 }); // testing…
-  let proc = null;
+
+function coreCheck(cfgFile) {
+  return new Promise(resolve => {
+    execFile(corePath(), ['check', '-c', cfgFile], { windowsHide: true, timeout: 30000 }, (err, so, se) => resolve(err ? String(se || so || err.message) : null));
+  });
+}
+
+// Tests many servers in one engine. Invalid entries (bad keys/methods from public lists) are dropped first,
+// because one broken outbound stops the whole engine from starting. Returns Map(id -> ms, -1 = dead).
+async function runTests(list, onResult, concurrency = 8) {
+  const results = new Map();
+  let items = list.map((s, i) => ({ s, tag: 't' + i }));
+  const apiPort = await freePort(21900);
+  const cfgFile = path.join(RUN_DIR, 'test.json');
+  let cfg;
+  for (let guard = 0; guard < 60 && items.length; guard++) {
+    cfg = buildMultiTestConfig(items.map(x => x.s), apiPort);
+    // buildMultiTestConfig tags by position; keep our tags aligned with it
+    items.forEach((x, i) => { x.tag = 't' + i; });
+    fs.writeFileSync(cfgFile, JSON.stringify(cfg));
+    const err = await coreCheck(cfgFile);
+    if (!err) break;
+    const m = /(outbound|endpoint)\[(\d+)\]/.exec(err);
+    if (!m) { log('test config rejected: ' + err.trim().slice(0, 200)); return results; }
+    const arr = m[1] === 'outbound' ? cfg.outbounds : (cfg.endpoints || []);
+    const badTag = arr[parseInt(m[2], 10)] && arr[parseInt(m[2], 10)].tag;
+    const bad = items.find(x => x.tag === badTag);
+    if (!bad) { log('test config rejected: ' + err.trim().slice(0, 200)); return results; }
+    results.set(bad.s.id, -1); if (onResult) onResult(bad.s, -1);
+    items = items.filter(x => x !== bad);
+  }
+  if (!items.length) return results;
+  const proc = spawn(corePath(), ['run', '-c', cfgFile, '-D', RUN_DIR, '--disable-color'], { windowsHide: true });
+  proc.on('error', e => log('test core: ' + e.message));
   try {
-    const apiPort = await freePort(21900);
-    const cfgFile = path.join(RUN_DIR, 'test.json');
-    fs.writeFileSync(cfgFile, JSON.stringify(buildMultiTestConfig(list, apiPort)));
-    proc = spawn(corePath(), ['run', '-c', cfgFile, '-D', RUN_DIR, '--disable-color'], { windowsHide: true });
-    proc.on('error', e => log('test core: ' + e.message));
     await waitApi(apiPort);
-    const queue = list.map((s, i) => ({ s, tag: 't' + i }));
+    const queue = items.slice();
     const worker = async () => {
       while (queue.length) {
         const { s, tag } = queue.shift();
-        const ms = await delay(apiPort, tag);
-        s.ping = ms;
-        const stored = store.servers.find(x => x.id === s.id);
-        if (stored) stored.ping = ms;
-        send('ping', { id: s.id, ms });
+        const first = await delayOnce(apiPort, tag, TEST_URLS[0]);
+        const ms = first > 0 ? first : await delayOnce(apiPort, tag, TEST_URLS[1]);
+        results.set(s.id, ms);
+        if (onResult) onResult(s, ms);
       }
     };
-    await Promise.all(Array.from({ length: 8 }, worker));
-    save();
-  } catch (e) {
-    log('test failed: ' + e.message);
-    for (const s of list) send('ping', { id: s.id, ms: -1 });
+    await Promise.all(Array.from({ length: concurrency }, worker));
   } finally {
-    if (proc) { try { if (process.platform === 'win32') execFile('taskkill', ['/PID', String(proc.pid), '/T', '/F'], { windowsHide: true }, () => {}); else proc.kill(); } catch {} }
-    testing = false;
+    try { if (process.platform === 'win32') execFile('taskkill', ['/PID', String(proc.pid), '/T', '/F'], { windowsHide: true }, () => {}); else proc.kill(); } catch {}
   }
+  return results;
+}
+
+// TCP connect time — used for Telegram MTProto proxies (they can't be tested through the engine).
+function tcpPing(host, port, timeout = 3500) {
+  return new Promise(resolve => {
+    const t0 = Date.now();
+    const sock = tcp.connect({ host: String(host).replace(/\.$/, ''), port });
+    const done = ms => { sock.destroy(); resolve(ms); };
+    sock.setTimeout(timeout, () => done(-1));
+    sock.once('connect', () => done(Date.now() - t0));
+    sock.once('error', () => done(-1));
+  });
+}
+
+async function testServers(ids) {
+  if (testing) return;
+  testing = true;
+  try {
+    const sel = ids && ids.length ? store.servers.filter(s => ids.includes(s.id)) : store.servers;
+    const list = sel.filter(s => s.protocol !== 'mtproto');
+    const tg = sel.filter(s => s.protocol === 'mtproto');
+    if (store.engine === 'warp' && store.warpAccount && (!ids || ids.includes('warp'))) list.push(warp.toServer(store.warpAccount, store.warpEndpoint));
+    for (const s of list.concat(tg)) send('ping', { id: s.id, ms: -2 });
+    const apply = (s, ms) => {
+      const stored = store.servers.find(x => x.id === s.id);
+      if (stored) stored.ping = ms;
+      send('ping', { id: s.id, ms });
+    };
+    await Promise.all([
+      list.length ? runTests(list, apply).catch(e => { log('test failed: ' + e.message); list.forEach(s => apply(s, -1)); }) : null,
+      ...tg.map(s => tcpPing(s.outbound.server, s.outbound.server_port).then(ms => apply(s, ms)))
+    ]);
+    save();
+  } finally { testing = false; }
+}
+
+// ---------------- free servers ----------------
+const FREE_SOURCES = {
+  v2ray: [
+    'https://raw.githubusercontent.com/barry-far/V2ray-Config/main/Sub1.txt',
+    'https://raw.githubusercontent.com/MatinGhanbari/v2ray-configs/main/subscriptions/v2ray/super-sub.txt'
+  ],
+  mtproto: ['https://raw.githubusercontent.com/SoliSpirit/mtproto/master/all_proxies.txt']
+};
+const KEEP_VPN = 25, KEEP_TG = 12, SAMPLE_VPN = 160, SAMPLE_TG = 60;
+let fetching = false;
+
+function shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+function progress(stage, extra) { send('fetch-progress', Object.assign({ stage }, extra || {})); }
+
+async function fetchFreeServers() {
+  if (fetching) return { busy: true };
+  fetching = true;
+  try {
+    const sources = (store.settings.freeSources && store.settings.freeSources.length) ? store.settings.freeSources : null;
+    const v2Urls = sources ? sources.filter(u => !/mtproto/i.test(u)) : FREE_SOURCES.v2ray;
+    const tgUrls = sources ? sources.filter(u => /mtproto/i.test(u)) : FREE_SOURCES.mtproto;
+    progress('download');
+    const texts = await Promise.all(v2Urls.concat(tgUrls).map(u => fetchSubscription(u).catch(e => { log(`source ${u}: ${e.message}`); return ''; })));
+    const have = new Set(store.servers.map(s => (s.outbound.server + ':' + s.outbound.server_port + ':' + s.protocol).toLowerCase()));
+    const seen = new Set();
+    const vpn = [], tg = [];
+    for (const t of texts) {
+      for (const s of parseMany(t).servers) {
+        const key = (s.outbound.server + ':' + s.outbound.server_port + ':' + s.protocol).toLowerCase();
+        if (have.has(key) || seen.has(key)) continue;
+        seen.add(key);
+        (s.protocol === 'mtproto' ? tg : vpn).push(s);
+      }
+    }
+    if (!vpn.length && !tg.length) throw new Error('FETCH_FAILED');
+    const vpnSample = shuffle(vpn).slice(0, SAMPLE_VPN);
+    const tgSample = shuffle(tg).slice(0, SAMPLE_TG);
+    const total = vpnSample.length + tgSample.length;
+    let done = 0, alive = 0;
+    const tick = ms => { done++; if (ms > 0) alive++; progress('test', { done, total, alive }); };
+    progress('test', { done: 0, total, alive: 0 });
+
+    const [vres, tres] = await Promise.all([
+      vpnSample.length ? runTests(vpnSample, (s, ms) => tick(ms), 12) : new Map(),
+      (async () => {
+        const m = new Map(); const q = tgSample.slice();
+        await Promise.all(Array.from({ length: 12 }, async () => { while (q.length) { const s = q.shift(); const ms = await tcpPing(s.outbound.server, s.outbound.server_port); m.set(s.id, ms); tick(ms); } }));
+        return m;
+      })()
+    ]);
+
+    const pick = (arr, res, n) => arr.map(s => Object.assign(s, { ping: res.get(s.id) })).filter(s => s.ping > 0).sort((a, b) => a.ping - b.ping).slice(0, n);
+    const newVpn = pick(vpnSample, vres, KEEP_VPN);
+    const newTg = pick(tgSample, tres, KEEP_TG);
+    [...newVpn, ...newTg].forEach(s => { s.free = true; s.name = (s.protocol === 'mtproto' ? 'Telegram · ' : '⚡ ') + (s.name && s.name.length < 40 && !/^[A-Za-z0-9+/=]{30,}$/.test(s.name) ? s.name.replace(/^Telegram · /, '') : s.outbound.server); });
+
+    // replace the previous batch of free servers that are no longer working
+    const prevFree = store.servers.filter(s => s.free);
+    const keepPrev = prevFree.filter(s => s.ping > 0 || (state.server && state.server.id === s.id));
+    store.servers = store.servers.filter(s => !s.free).concat(keepPrev.slice(0, 10), newVpn, newTg);
+    if (newVpn.length && (store.engine !== 'server' || !store.servers.find(s => s.id === store.selected && s.protocol !== 'mtproto'))) {
+      if (state.status !== 'connected') { store.engine = 'server'; store.selected = newVpn[0].id; }
+    }
+    save();
+    progress('done', { vpn: newVpn.length, tg: newTg.length });
+    return { vpn: newVpn.length, tg: newTg.length, store: publicStore() };
+  } catch (e) {
+    progress('error', { message: e.message });
+    throw e;
+  } finally { fetching = false; }
 }
 
 const TEST_URLS = ['https://www.gstatic.com/generate_204', 'https://cp.cloudflare.com/generate_204', 'https://www.github.com/'];
@@ -564,6 +686,14 @@ ipcMain.handle('best', async () => {
 });
 
 ipcMain.handle('test', (_e, ids) => { testServers(ids); return true; });
+ipcMain.handle('fetch-free', () => fetchFreeServers());
+ipcMain.handle('remove-free', async () => {
+  if (state.status === 'connected' && state.server && (store.servers.find(s => s.id === state.server.id) || {}).free) await disconnect();
+  store.servers = store.servers.filter(s => !s.free);
+  if (!store.servers.find(s => s.id === store.selected)) store.selected = (store.servers.find(s => s.protocol !== 'mtproto') || {}).id || null;
+  save();
+  return publicStore();
+});
 
 ipcMain.handle('sub-update', async (_e, id) => {
   const subs = id ? store.subscriptions.filter(s => s.id === id) : store.subscriptions;

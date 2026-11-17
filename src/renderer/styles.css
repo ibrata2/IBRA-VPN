@@ -227,3 +227,13 @@ input[type="number"] { width: 90px; }
 .tg-list h3 { margin: 2px 0 0; color: var(--text); font-size: 14px; }
 .tg-hint { margin: 0 0 4px; }
 .badge.tgb { color: #2aabee; border-color: rgba(42,171,238,.4); }
+
+.fetch-box { margin-bottom: 12px; }
+.primary.big { width: 100%; padding: 11px; font-size: 14px; border-radius: 13px; }
+.primary.big:disabled svg { animation: spin 1s linear infinite; }
+.home-fetch { margin-bottom: 12px; }
+.fetch-prog { margin-top: 8px; }
+.fetch-prog .bar { height: 6px; border-radius: 6px; background: var(--glass2); overflow: hidden; }
+.fetch-prog .bar i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--accent), var(--accent2)); transition: width .3s; }
+.fetch-prog small { display: block; color: var(--muted); font-size: 11px; margin-top: 4px; }
+.badge.free { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 40%, transparent); }
