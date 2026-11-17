@@ -61,6 +61,7 @@ jobs:
         env:
           DISABLE_SWIFTLINT: '1'
         run: |
+          set -o pipefail
           defaults write com.apple.dt.Xcode IDESkipPackagePluginFingerprintValidatation -bool YES
           defaults write com.apple.dt.Xcode IDESkipMacroFingerprintValidation -bool YES
           xcodebuild build -skipPackagePluginValidation -skipMacroValidation \
@@ -70,7 +71,8 @@ jobs:
             APP_GROUP_IDENTIFIER=group.com.ibraprogram.ibravpn \
             MARKETING_VERSION="$APP_VERSION" CURRENT_PROJECT_VERSION=1 \
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" ENABLE_BITCODE=NO \
-            | tail -40
+            > "$RUNNER_TEMP/build.log" 2>&1 || { grep -E "error:" "$RUNNER_TEMP/build.log" | sort -u | head -40; tail -30 "$RUNNER_TEMP/build.log"; exit 1; }
+          tail -5 "$RUNNER_TEMP/build.log"
           ls "$RUNNER_TEMP/dd/Build/Products/Release-iphoneos/"
 
       - name: Sign with entitlements and package IPA

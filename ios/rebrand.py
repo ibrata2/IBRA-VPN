@@ -15,6 +15,8 @@ pbx = os.path.join(apple, 'sing-box.xcodeproj', 'project.pbxproj')
 s = open(pbx, encoding='utf-8').read()
 n = s.replace('INFOPLIST_KEY_CFBundleDisplayName = "sing-box";', 'INFOPLIST_KEY_CFBundleDisplayName = "IBRA VPN";')
 if n == s: raise SystemExit('rebrand: display name not found')
+# SFI's code uses iOS 16 SwiftUI APIs; raise the 15.0 targets (newer targets stay as they are)
+n = n.replace('IPHONEOS_DEPLOYMENT_TARGET = 15.0;', 'IPHONEOS_DEPLOYMENT_TARGET = 16.0;')
 open(pbx, 'w', encoding='utf-8').write(n)
 
 icon_dir = os.path.join(apple, 'SFI', 'Assets.xcassets', 'AppIcon.appiconset')
