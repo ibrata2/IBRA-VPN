@@ -49,6 +49,27 @@ if 'ibraprogram.netlify.app' not in t:
     t = t.replace(anchor, ibra + anchor, 1)
     open(sv, 'w', encoding='utf-8').write(t)
 
+# IBRA home screen replaces the stock dashboard tab on iPhone
+shutil.copy(os.path.join(here, 'IBRAHomeView.swift'), os.path.join(apple, 'ApplicationLibrary', 'Views', 'Dashboard', 'IBRAHomeView.swift'))
+nav = os.path.join(apple, 'ApplicationLibrary', 'Views', 'NavigationPage.swift')
+t = open(nav, encoding='utf-8').read()
+old = '''            case .dashboard:
+                DashboardView()'''
+if old not in t: raise SystemExit('rebrand: NavigationPage dashboard anchor not found')
+t = t.replace(old, '''            case .dashboard:
+                #if os(iOS)
+                    IBRAHomeView()
+                #else
+                    DashboardView()
+                #endif''', 1)
+t = t.replace('''        case .dashboard:
+            return String(localized: "Dashboard")''', '''        case .dashboard:
+            return "الرئيسية"''', 1)
+t = t.replace('''        case .dashboard:
+            return "text.and.command.macwindow"''', '''        case .dashboard:
+            return "power.circle.fill"''', 1)
+open(nav, 'w', encoding='utf-8').write(t)
+
 os.makedirs(ent_out, exist_ok=True)
 def plist(app_id, extra=''):
     return f'''<?xml version="1.0" encoding="UTF-8"?>
