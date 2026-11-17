@@ -27,7 +27,7 @@ jobs:
       - name: Checkout sing-box ${{ env.SINGBOX_TAG }} (with Apple client)
         run: |
           git clone --depth 1 --branch "$SINGBOX_TAG" https://github.com/SagerNet/sing-box sb
-          cd sb && git submodule update --init --depth 1 clients/apple
+          cd sb && git submodule update --init --depth 1 clients/apple && git -C clients/apple submodule update --init --recursive --depth 1 && ls clients/apple/Frameworks/*
 
       - name: Select newest Xcode
         run: |
