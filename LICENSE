@@ -1,0 +1,13 @@
+IBRA VPN
+Copyright (c) 2026 Ibrahim Al-Khazraji — برمجة وتطوير ابراهيم الخزرجي (IBRAPROGRAM)
+All rights reserved.
+
+Third-party components
+----------------------
+This program ships, as a separate executable, the sing-box engine
+(https://sing-box.sagernet.org), Copyright (C) 2022 by nekohasekai,
+licensed under the GNU General Public License v3.0 or later.
+Its license text is installed next to it in resources/core/LICENSE and its
+source code is available from the sing-box project.
+
+The Cairo font is licensed under the SIL Open Font License 1.1 (src/renderer/fonts/OFL.txt).

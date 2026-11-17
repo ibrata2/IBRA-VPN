@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="ar" dir="rtl" data-theme="gold">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; font-src 'self'; script-src 'self'">
+<title>IBRA VPN</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="app">
+  <header class="titlebar">
+    <div class="brand"><img src="logo.png" alt=""><span>IBRA <b>VPN</b></span></div>
+    <div class="win-btns">
+      <button class="wbtn" data-win="min" title="—"><svg viewBox="0 0 12 12"><path d="M2 6h8"/></svg></button>
+      <button class="wbtn close" data-win="close" title="×"><svg viewBox="0 0 12 12"><path d="M3 3l6 6M9 3l-6 6"/></svg></button>
+    </div>
+  </header>
+
+  <main>
+    <!-- HOME -->
+    <section class="page active" id="page-home">
+      <div class="engine-seg" id="engineSeg">
+        <button data-engine="server" data-i="engServer"></button>
+        <button data-engine="warp" data-i="engWarp"></button>
+        <button data-engine="bypass" data-i="engBypass"></button>
+      </div>
+
+      <div class="power-wrap">
+        <div class="rings"><i></i><i></i><i></i></div>
+        <button class="power" id="power" aria-label="connect">
+          <svg viewBox="0 0 24 24"><path d="M12 3v8"/><path d="M6.2 6.6a8 8 0 1 0 11.6 0"/></svg>
+        </button>
+      </div>
+      <div class="status" id="statusText"></div>
+      <div class="timer" id="timer">00:00:00</div>
+      <div class="error" id="errorBox" hidden></div>
+
+      <button class="card server-card" id="serverCard">
+        <div class="sc-icon" id="scIcon"></div>
+        <div class="sc-body"><div class="sc-name" id="scName"></div><div class="sc-sub" id="scSub"></div></div>
+        <div class="sc-ping" id="scPing"></div>
+        <svg class="chev" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg>
+      </button>
+
+      <div class="stats">
+        <div class="stat"><span class="arrow down">↓</span><b id="sDown">0 B/s</b><small data-i="download"></small></div>
+        <div class="stat"><span class="arrow up">↑</span><b id="sUp">0 B/s</b><small data-i="upload"></small></div>
+        <div class="stat"><span class="arrow">Σ</span><b id="sTotal">0 B</b><small data-i="total"></small></div>
+      </div>
+
+      <div class="card ip-card" id="ipCard">
+        <span class="flag" id="ipFlag">🌐</span>
+        <div><div id="ipCountry" data-i="ipUnknown"></div><small id="ipAddr">—</small></div>
+        <button class="ghost small" id="ipRefresh" data-i="refresh"></button>
+      </div>
+
+      <div class="quick">
+        <div class="qrow">
+          <span data-i="modeLabel"></span>
+          <div class="mini-seg" id="modeSeg"><button data-v="proxy" data-i="modeProxy"></button><button data-v="tun" data-i="modeTun"></button></div>
+        </div>
+        <div class="qrow">
+          <span data-i="routeLabel"></span>
+          <div class="mini-seg" id="routeSeg"><button data-v="global" data-i="routeGlobal"></button><button data-v="smart" data-i="routeSmart"></button></div>
+        </div>
+        <label class="qrow switch-row"><span data-i="blockAds"></span><input type="checkbox" id="adsToggle"><i class="switch"></i></label>
+      </div>
+    </section>
+
+    <!-- SERVERS -->
+    <section class="page" id="page-servers">
+      <h2 data-i="servers"></h2>
+      <div class="add-box">
+        <textarea id="addInput" rows="3" spellcheck="false" data-ip="addPlaceholder"></textarea>
+        <div class="row">
+          <button class="ghost" id="pasteBtn"><svg viewBox="0 0 24 24"><rect x="6" y="4" width="12" height="17" rx="2"/><path d="M9 4h6v3H9z"/></svg><span data-i="paste"></span></button>
+          <button class="primary" id="addBtn" data-i="add"></button>
+        </div>
+        <small class="hint" data-i="addHint"></small>
+      </div>
+
+      <div class="subs" id="subsList"></div>
+
+      <div class="toolbar">
+        <button class="ghost small" id="testAll" data-i="testAll"></button>
+        <button class="ghost small" id="sortBtn" data-i="sortPing"></button>
+        <button class="ghost small" id="bestBtn" data-i="pickBest"></button>
+        <button class="ghost small danger" id="deadBtn" data-i="removeDead"></button>
+      </div>
+      <div class="list" id="serverList"></div>
+      <div class="empty" id="emptyList" data-i="emptyList"></div>
+    </section>
+
+    <!-- SETTINGS -->
+    <section class="page" id="page-settings">
+      <h2 data-i="settings"></h2>
+      <div class="group">
+        <div class="field"><span data-i="language"></span>
+          <div class="mini-seg" id="langSeg"><button data-v="ar">العربية</button><button data-v="en">English</button></div></div>
+        <div class="field"><span data-i="theme"></span>
+          <div class="themes" id="themeSel">
+            <button data-v="gold" title="Gold"><i style="--a:#d4af37;--b:#0b0b0d"></i></button>
+            <button data-v="red" title="Red"><i style="--a:#e0262f;--b:#0d0d10"></i></button>
+            <button data-v="light" title="Light"><i style="--a:#c9a84c;--b:#f4f2ee"></i></button>
+            <button data-v="system" title="System"><i style="--a:#888;--b:linear-gradient(90deg,#111 50%,#eee 50%)"></i></button>
+          </div></div>
+        <div class="field"><span data-i="dns"></span>
+          <select id="dnsSel"><option value="cloudflare">Cloudflare 1.1.1.1</option><option value="google">Google 8.8.8.8</option><option value="quad9">Quad9 9.9.9.9</option><option value="adguard">AdGuard</option></select></div>
+      </div>
+
+      <div class="group">
+        <label class="field switch-row"><span data-i="autoStart"></span><input type="checkbox" data-set="autoStart"><i class="switch"></i></label>
+        <label class="field switch-row"><span data-i="autoConnect"></span><input type="checkbox" data-set="autoConnect"><i class="switch"></i></label>
+        <label class="field switch-row"><span data-i="startHidden"></span><input type="checkbox" data-set="startHidden"><i class="switch"></i></label>
+        <label class="field switch-row"><span data-i="closeToTray"></span><input type="checkbox" data-set="closeToTray"><i class="switch"></i></label>
+        <label class="field switch-row"><span data-i="autoUpdate"></span><input type="checkbox" data-set="autoUpdate"><i class="switch"></i></label>
+        <div class="field"><span id="updText" data-i="updates"></span><button class="ghost small" id="updBtn" data-i="checkNow"></button></div>
+      </div>
+
+      <div class="group">
+        <h3>WARP</h3>
+        <div class="field"><span data-i="warpEndpoint"></span>
+          <div class="row tight"><select id="warpHost"></select><select id="warpPort"></select></div></div>
+        <div class="field"><span data-i="warpNew"></span><button class="ghost small" id="warpReset" data-i="reset"></button></div>
+      </div>
+
+      <div class="group">
+        <h3 data-i="advanced"></h3>
+        <div class="field"><span data-i="localPort"></span><input type="number" id="portIn" min="1024" max="65000"></div>
+        <div class="field"><span data-i="logs"></span><button class="ghost small" id="logsFolder" data-i="openFolder"></button></div>
+        <pre class="logs" id="logs"></pre>
+      </div>
+    </section>
+
+    <!-- ABOUT -->
+    <section class="page" id="page-about">
+      <div class="about">
+        <img src="logo.png" class="about-logo" alt="">
+        <h1>IBRA <b>VPN</b></h1>
+        <div class="ver" id="ver"></div>
+        <p data-i="aboutText"></p>
+        <div class="credit" data-i="credit"></div>
+        <div class="links">
+          <button class="link tg" data-open="https://t.me/ibraprogram"><svg viewBox="0 0 24 24"><path d="M21 4L3 11l6 2 2 6 3-4 5 4z"/><path d="M9 13l9-7"/></svg>Telegram · ibraprogram</button>
+          <button class="link tt" data-open="https://www.tiktok.com/@ibraprogram"><svg viewBox="0 0 24 24"><path d="M14 3v11.5a3.5 3.5 0 1 1-3.5-3.5"/><path d="M14 3c.5 2.5 2.5 4 5 4"/></svg>TikTok · ibraprogram</button>
+        </div>
+        <small class="lic" data-i="license"></small>
+      </div>
+    </section>
+  </main>
+
+  <nav class="tabs">
+    <button data-page="home" class="active"><svg viewBox="0 0 24 24"><path d="M12 3v8"/><path d="M6.2 6.6a8 8 0 1 0 11.6 0"/></svg><span data-i="tHome"></span></button>
+    <button data-page="servers"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="6" rx="2"/><rect x="3" y="14" width="18" height="6" rx="2"/><path d="M7 7h.01M7 17h.01"/></svg><span data-i="tServers"></span></button>
+    <button data-page="settings"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg><span data-i="tSettings"></span></button>
+    <button data-page="about"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.01"/></svg><span data-i="tAbout"></span></button>
+  </nav>
+
+  <div class="toast" id="toast"></div>
+  <div class="modal" id="modal" hidden><div class="modal-card"><p id="modalText"></p><input id="modalInput" hidden><div class="row" id="modalBtns"></div></div></div>
+</div>
+<script src="i18n.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

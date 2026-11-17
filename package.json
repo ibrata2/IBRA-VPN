@@ -1,0 +1,91 @@
+{
+  "name": "ibra-vpn",
+  "productName": "IBRA VPN",
+  "version": "1.0.0",
+  "description": "IBRA VPN — فتح المواقع والتطبيقات المحجوبة. برمجة وتطوير ابراهيم الخزرجي",
+  "author": "Ibrahim Al-Khazraji (IBRAPROGRAM)",
+  "license": "SEE LICENSE IN LICENSE",
+  "main": "src/main.js",
+  "scripts": {
+    "core": "node scripts/fetch-core.js",
+    "start": "electron .",
+    "dist": "node scripts/fetch-core.js win && electron-builder --win nsis --x64",
+    "release": "node scripts/fetch-core.js win && electron-builder --win nsis --x64 --publish always"
+  },
+  "dependencies": {
+    "electron-updater": "^6.3.9"
+  },
+  "devDependencies": {
+    "electron": "^33.2.1",
+    "electron-builder": "^25.1.8",
+    "resedit": "^2.0.3"
+  },
+  "build": {
+    "appId": "com.ibraprogram.ibravpn",
+    "productName": "IBRA VPN",
+    "copyright": "برمجة وتطوير ابراهيم الخزرجي",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "src/**/*",
+      "build/icon.png",
+      "package.json",
+      "LICENSE"
+    ],
+    "extraResources": [
+      {
+        "from": "core",
+        "to": "core",
+        "filter": [
+          "sing-box.exe",
+          "libcronet.dll",
+          "LICENSE"
+        ]
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.ico",
+      "artifactName": "IBRA-VPN-Setup-${version}.${ext}",
+      "requestedExecutionLevel": "asInvoker",
+      "signAndEditExecutable": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowElevation": true,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "IBRA VPN",
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "installerLanguages": [
+        "ar_SA",
+        "en_US"
+      ],
+      "language": "1025",
+      "multiLanguageInstaller": true,
+      "include": "build/installer.nsh",
+      "deleteAppDataOnUninstall": false
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "ibrata2",
+        "repo": "ibra-vpn",
+        "releaseType": "release"
+      }
+    ],
+    "afterPack": "scripts/after-pack.js"
+  }
+}
