@@ -87,6 +87,45 @@ jobs:
           name: ibra-vpn-android
           path: out/*.apk
 
+  test:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: ibra-vpn-android
+          path: apks
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules && sudo udevadm trigger --name-match=kvm
+      - name: Install, launch and screenshot every APK on an Android emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 30
+          arch: x86_64
+          target: google_apis
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
+          script: bash android/test-apks.sh apks shots
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: android-test-screenshots
+          path: shots/
+
+  release:
+    needs: [build, test]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Read version
+        run: echo "APP_VERSION=$(node -p "require('./package.json').version")" >> $GITHUB_ENV
+      - uses: actions/download-artifact@v4
+        with:
+          name: ibra-vpn-android
+          path: out
       - name: Attach to release v${{ env.APP_VERSION }}
         uses: softprops/action-gh-release@v2
         with:

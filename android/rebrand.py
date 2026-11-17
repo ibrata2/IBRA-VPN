@@ -131,4 +131,35 @@ with open(os.path.join(pkg, 'IbraSeed.kt'), 'w', encoding='utf-8') as f: f.write
 edit(os.path.join(pkg, 'AngApplication.kt'), lambda s: s.replace(
     '        SettingsManager.initApp(this)\n', '        SettingsManager.initApp(this)\n\n        // IBRA VPN: free server lists\n        IbraSeed.run(this)\n', 1))
 
+# 8) IBRA home screen as the launcher (the original screen stays as "كل السيرفرات")
+shutil.copy(os.path.join(here, 'IbraHomeActivity.kt'), os.path.join(pkg, 'ui', 'IbraHomeActivity.kt'))
+def manifest(s):
+    old = '''            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+
+                <category android:name="android.intent.category.LAUNCHER" />
+                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE_PREFERENCES" />'''
+    if old not in s: raise SystemExit('rebrand: manifest launcher block not found')
+    s = s.replace(old, '''            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE_PREFERENCES" />''', 1)
+    home = '''        <activity
+            android:name=".ui.IbraHomeActivity"
+            android:exported="true"
+            android:launchMode="singleTask">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+
+                <category android:name="android.intent.category.LAUNCHER" />
+                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+            </intent-filter>
+        </activity>
+        <activity
+            android:name=".ui.main.MainActivity"'''
+    return s.replace('''        <activity
+            android:name=".ui.main.MainActivity"''', home, 1)
+edit(os.path.join(main, 'AndroidManifest.xml'), manifest)
+
 print(f'IBRA VPN rebrand done: {APP_ID} v{version} (code {code})')
