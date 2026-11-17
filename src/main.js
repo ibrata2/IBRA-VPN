@@ -36,7 +36,7 @@ const DEFAULTS = {
   warpEndpoint: { host: warp.WARP_ENDPOINTS[0], port: 2408 },
   settings: {
     lang: 'ar', theme: 'gold', mode: 'proxy', routing: 'global', blockAds: false, dns: 'cloudflare',
-    mixedPort: 20808, apiPort: 20809, autoStart: false, autoConnect: false, startHidden: false,
+    mixedPort: 20808, apiPort: 20809, socialDirect: true, autoStart: false, autoConnect: false, startHidden: false,
     closeToTray: true, autoUpdate: true
   },
   lastProxyPort: null
@@ -49,6 +49,17 @@ function loadStore() {
   } catch { return JSON.parse(JSON.stringify(DEFAULTS)); }
 }
 let store = loadStore();
+
+// Built-in free Telegram (MTProto) proxies — added once; the user can delete them.
+const BUILTIN_TG = [
+  'tg://proxy?server=fast.strobox.info&port=443&secret=ddf0eeb0bd9adc4fd4a93994ee3b2a216b',
+  'tg://proxy?server=Tond.strobox.info&port=443&secret=ddf0eeb0bd9adc4fd4a93994ee3b2a216b'
+];
+store.seeded = store.seeded || [];
+for (const l of BUILTIN_TG) {
+  if (store.seeded.includes(l)) continue;
+  try { const sv = parseLink(l); sv.builtin = true; store.servers.push(sv); store.seeded.push(l); } catch {}
+}
 let saveTimer = null;
 function save() {
   clearTimeout(saveTimer);
@@ -129,6 +140,7 @@ function corePath() {
 
 const state = { status: 'disconnected', since: null, server: null, ip: null, error: null, up: 0, down: 0, upTotal: 0, downTotal: 0 };
 let core = null, trafficReq = null, stopping = false;
+let gen = 0; // bumps on every disconnect so an in-flight connect() knows it was cancelled
 
 function pushState() { send('state', state); refreshTray(); }
 
@@ -160,18 +172,26 @@ async function freePort(start) {
   throw new Error('no free port');
 }
 
+function rulesDir() {
+  const c = [path.join(process.resourcesPath || '', 'core', 'rules'), path.join(__dirname, '..', 'core', 'rules')];
+  return c.find(p => fs.existsSync(p)) || null;
+}
+
 function currentServer() {
   if (store.engine === 'warp') return store.warpAccount ? warp.toServer(store.warpAccount, store.warpEndpoint) : null;
   if (store.engine === 'bypass') return { id: 'bypass', name: 'BYPASS', protocol: 'bypass' };
-  return store.servers.find(s => s.id === store.selected) || store.servers[0] || null;
+  return store.servers.find(s => s.id === store.selected && s.protocol !== 'mtproto') || store.servers.find(s => s.protocol !== 'mtproto') || null;
 }
 
-function waitApi(port, ms = 8000) {
+function waitApi(port, ms = 8000, watchCore = false) {
   const t0 = Date.now();
   return new Promise((resolve, reject) => {
     const tryOnce = () => {
       const req = http.get({ host: '127.0.0.1', port, path: '/version', timeout: 800 }, res => { res.resume(); resolve(); });
-      req.on('error', () => (Date.now() - t0 > ms ? reject(new Error('core did not start')) : setTimeout(tryOnce, 200)));
+      req.on('error', () => {
+        if (watchCore && !core) return reject(new Error('CORE_FAILED'));
+        Date.now() - t0 > ms ? reject(new Error('CORE_FAILED')) : setTimeout(tryOnce, 200);
+      });
       req.on('timeout', () => req.destroy());
     };
     tryOnce();
@@ -179,7 +199,9 @@ function waitApi(port, ms = 8000) {
 }
 
 async function connect() {
-  if (state.status === 'connected' || state.status === 'connecting') return;
+  if (state.status !== 'disconnected') return;
+  const my = ++gen;
+  const cancelled = () => my !== gen;
   const s = store.settings;
   state.error = null;
   try {
@@ -201,8 +223,10 @@ async function connect() {
     const apiPort = await freePort(s.apiPort === mixedPort ? s.apiPort + 1 : s.apiPort);
     const cfg = buildConfig({
       engine: store.engine === 'bypass' ? 'bypass' : 'server', server: store.engine === 'bypass' ? null : server,
-      mode: s.mode, routing: s.routing, blockAds: s.blockAds, dns: s.dns, mixedPort, apiPort, cacheDir: RUN_DIR, logLevel: 'info'
+      mode: s.mode, routing: s.routing, blockAds: s.blockAds, dns: s.dns, socialDirect: s.socialDirect,
+      rulesDir: rulesDir(), mixedPort, apiPort, cacheDir: RUN_DIR, logLevel: 'info'
     });
+    if (cancelled()) return;
     const cfgFile = path.join(RUN_DIR, 'config.json');
     fs.writeFileSync(cfgFile, JSON.stringify(cfg, null, 1));
     log(`connecting → ${server.name} [${server.protocol}] mode=${s.mode} routing=${s.routing}`);
@@ -218,29 +242,42 @@ async function connect() {
       if (unexpected) {
         log(`core exited (${code})`);
         if (state.mixedPort) sysproxy.disable(state.mixedPort).catch(() => {});
-        Object.assign(state, { status: 'disconnected', since: null, ip: null, up: 0, down: 0, mixedPort: null, error: state.status === 'connecting' ? 'CORE_FAILED' : 'CORE_STOPPED' });
+        Object.assign(state, { status: 'disconnected', since: null, ip: null, up: 0, down: 0, mixedPort: null, warning: null, error: state.status === 'connecting' ? 'CORE_FAILED' : 'CORE_STOPPED' });
         pushState();
         notify(store.settings.lang === 'ar' ? 'انقطع الاتصال' : 'Connection lost');
       }
     });
 
-    await waitApi(apiPort);
+    await waitApi(apiPort, 10000, true);
+    if (cancelled()) { await killCore(); return; }
     state.mixedPort = mixedPort; state.apiPort = apiPort;
     if (s.mode === 'proxy') {
       await sysproxy.enable(mixedPort);
       store.lastProxyPort = mixedPort; save();
     }
-    Object.assign(state, { status: 'connected', since: Date.now(), up: 0, down: 0, upTotal: 0, downTotal: 0 });
+    Object.assign(state, { status: 'connected', since: Date.now(), up: 0, down: 0, upTotal: 0, downTotal: 0, warning: null });
     pushState();
     startTraffic(apiPort);
+    healthCheck(apiPort);
     checkIp();
     log('connected ✓');
   } catch (e) {
     log('connect failed: ' + e.message);
     await killCore();
+    if (cancelled()) return;
     Object.assign(state, { status: 'disconnected', since: null, error: e.message });
     pushState();
   }
+}
+
+// The core can start fine while the server itself is dead — test real traffic through it and warn the user.
+async function healthCheck(apiPort) {
+  const ms = await delay(apiPort, 'proxy');
+  if (state.status !== 'connected' || state.apiPort !== apiPort) return;
+  state.warning = ms < 0 ? 'SERVER_DEAD' : null;
+  state.latency = ms > 0 ? ms : null;
+  if (ms < 0) log('warning: server does not respond');
+  pushState();
 }
 
 function killCore() {
@@ -257,13 +294,14 @@ function killCore() {
 }
 
 async function disconnect() {
-  if (state.status === 'disconnected') return;
+  if (state.status === 'disconnected' || state.status === 'disconnecting') return;
+  gen++;
   state.status = 'disconnecting'; pushState();
   stopTraffic();
   try { await sysproxy.disable(state.mixedPort); } catch (e) { log('proxy off failed: ' + e.message); }
   store.lastProxyPort = null; save();
   await killCore();
-  Object.assign(state, { status: 'disconnected', since: null, ip: null, up: 0, down: 0, error: null, mixedPort: null });
+  Object.assign(state, { status: 'disconnected', since: null, ip: null, up: 0, down: 0, error: null, mixedPort: null, warning: null, latency: null });
   pushState();
   log('disconnected');
 }
@@ -384,9 +422,17 @@ async function testServers(ids) {
   }
 }
 
-function delay(apiPort, tag) {
+const TEST_URLS = ['https://www.gstatic.com/generate_204', 'https://cp.cloudflare.com/generate_204', 'https://www.github.com/'];
+async function delay(apiPort, tag) {
+  for (const u of TEST_URLS) {
+    const ms = await delayOnce(apiPort, tag, u);
+    if (ms > 0) return ms;
+  }
+  return -1;
+}
+function delayOnce(apiPort, tag, testUrl) {
   return new Promise(resolve => {
-    const p = `/proxies/${tag}/delay?timeout=6000&url=${encodeURIComponent('https://www.gstatic.com/generate_204')}`;
+    const p = `/proxies/${tag}/delay?timeout=6000&url=${encodeURIComponent(testUrl)}`;
     const req = http.get({ host: '127.0.0.1', port: apiPort, path: p, timeout: 9000 }, res => {
       let b = '';
       res.on('data', c => (b += c));
@@ -466,11 +512,15 @@ ipcMain.handle('add', async (_e, text) => {
     try { const r = await updateSubscription(sub); return Object.assign({ sub: true }, r, { store: publicStore() }); }
     catch (e) { store.subscriptions = store.subscriptions.filter(x => x !== sub); save(); throw new Error('SUB_FAILED: ' + e.message); }
   }
-  const { servers, errors } = parseMany(text);
+  const parsed = parseMany(text);
+  const errors = parsed.errors;
+  const have = new Set(store.servers.map(x => x.raw.toLowerCase()));
+  const servers = parsed.servers.filter(x => !have.has(x.raw.toLowerCase()));
+  if (!servers.length && parsed.servers.length) throw new Error('ALREADY_ADDED');
   if (!servers.length) throw new Error('NO_VALID_LINKS' + (errors[0] ? ': ' + errors[0].error : ''));
   store.servers.push(...servers);
-  if (!store.selected || !store.servers.find(s => s.id === store.selected)) store.selected = servers[0].id;
-  if (store.engine !== 'server') { store.engine = 'server'; store.selected = servers[0].id; }
+  const usable = servers.find(x => x.protocol !== 'mtproto');
+  if (usable && (!store.selected || !store.servers.find(s => s.id === store.selected) || store.engine !== 'server')) { store.selected = usable.id; store.engine = 'server'; }
   save();
   return { added: servers.length, errors: errors.length, store: publicStore() };
 });
@@ -558,7 +608,7 @@ ipcMain.handle('settings', async (_e, patch) => {
   Object.assign(store.settings, patch || {});
   save();
   if ('autoStart' in (patch || {})) applyAutoStart();
-  const needsReconnect = ['mode', 'routing', 'blockAds', 'dns'].some(k => k in (patch || {}) && before[k] !== store.settings[k]);
+  const needsReconnect = ['mode', 'routing', 'blockAds', 'dns', 'socialDirect'].some(k => k in (patch || {}) && before[k] !== store.settings[k]);
   if (needsReconnect && state.status === 'connected') { await disconnect(); await connect(); }
   refreshTray();
   return publicStore();

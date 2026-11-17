@@ -110,7 +110,7 @@ function renderHome() {
   $('#scName').textContent = name;
   $('#scSub').textContent = sub;
   $('#scIcon').textContent = PROTO[proto] || '+';
-  $('#scPing').innerHTML = id ? pingHtml(pings[id] ?? (S.servers.find(x => x.id === id) || {}).ping) : '';
+  $('#scPing').innerHTML = (st.status === 'connected' && st.latency) ? pingHtml(st.latency) : id ? pingHtml(pings[id] ?? (S.servers.find(x => x.id === id) || {}).ping) : '';
 
   // ip
   if (st.status === 'connected' && st.ip && st.ip.failed) {
@@ -132,6 +132,11 @@ function renderHome() {
   setSeg('#routeSeg', S.settings.routing);
   $('#routeSeg').classList.toggle('disabled', S.engine === 'bypass');
   $('#adsToggle').checked = !!S.settings.blockAds;
+  $('#socialToggle').checked = !!S.settings.socialDirect;
+  $('#socialToggle').closest('.qrow').classList.toggle('disabled', S.engine === 'bypass');
+  const wb = $('#warnBox');
+  wb.hidden = !(st.status === 'connected' && st.warning);
+  if (!wb.hidden) wb.textContent = T('warn')[st.warning] || st.warning;
 
   if (st.status !== 'connected') { $('#sDown').textContent = '0 B/s'; $('#sUp').textContent = '0 B/s'; }
   tickTimer();
@@ -160,7 +165,16 @@ function renderServers() {
     </div>`).join('');
 
   const list = $('#serverList');
-  list.innerHTML = S.servers.map(s => {
+  const tg = S.servers.filter(s => s.protocol === 'mtproto');
+  const vpnList = S.servers.filter(s => s.protocol !== 'mtproto');
+  $('#tgList').innerHTML = tg.length ? `<h3>${esc(T('tgProxies'))}</h3><small class="hint tg-hint">${esc(T('tgHint'))}</small>` + tg.map(s => `
+    <div class="srv mt" data-id="${esc(s.id)}">
+      <span class="badge tgb">TG</span>
+      <div class="grow"><b>${esc(s.name)}</b><small>${esc(s.outbound.server)}:${s.outbound.server_port}</small></div>
+      <button class="primary small" data-act="tg">${esc(T('connectTg'))}</button>
+      <button class="icon more" data-act="menu">⋮</button>
+    </div>`).join('') : '';
+  list.innerHTML = vpnList.map(s => {
     const sel = S.engine === 'server' && s.id === S.selected;
     const ms = pings[s.id] ?? s.ping;
     return `<div class="srv ${sel ? 'sel' : ''} ${s.protocol === 'mtproto' ? 'mt' : ''}" data-id="${esc(s.id)}">
@@ -171,7 +185,7 @@ function renderServers() {
       <button class="icon more" data-act="menu">⋮</button>
     </div>`;
   }).join('');
-  $('#emptyList').hidden = S.servers.length > 0;
+  $('#emptyList').hidden = vpnList.length > 0;
 }
 
 function renderSettings() {
@@ -199,7 +213,7 @@ $$('.tabs button').forEach(b => (b.onclick = () => go(b.dataset.page)));
 $('#power').onclick = () => {
   const st = S.state.status;
   if (st === 'connecting' || st === 'disconnecting') return;
-  if (S.engine === 'server' && !S.servers.length) { go('servers'); toast(errText('NO_SERVER')); return; }
+  if (S.engine === 'server' && !S.servers.some(x => x.protocol !== 'mtproto')) { go('servers'); toast(errText('NO_SERVER')); return; }
   vpn.toggle();
 };
 
@@ -211,6 +225,7 @@ $('#serverCard').onclick = () => { if (S.engine === 'server') go('servers'); };
 $$('#modeSeg button').forEach(b => (b.onclick = async () => { S = await vpn.settings({ mode: b.dataset.v }); render(); }));
 $$('#routeSeg button').forEach(b => (b.onclick = async () => { S = await vpn.settings({ routing: b.dataset.v }); render(); }));
 $('#adsToggle').onchange = async e => { S = await vpn.settings({ blockAds: e.target.checked }); render(); };
+$('#socialToggle').onchange = async e => { S = await vpn.settings({ socialDirect: e.target.checked }); render(); };
 $('#ipRefresh').onclick = () => vpn.checkIp();
 
 // servers page
@@ -246,7 +261,7 @@ $('#subsList').onclick = async e => {
   }
 };
 
-$('#serverList').onclick = async e => {
+const onListClick = async e => {
   const row = e.target.closest('.srv'); if (!row) return;
   const id = row.dataset.id;
   const s = S.servers.find(x => x.id === id);
@@ -266,9 +281,12 @@ $('#serverList').onclick = async e => {
     }
     return;
   }
-  if (s.protocol === 'mtproto') { vpn.openTelegram(id); return; }
+  if (s.protocol === 'mtproto') { vpn.openTelegram(id); toast(T('openingTg'), 'ok'); return; }
   S = await vpn.select({ engine: 'server', id }); render();
 };
+
+$('#serverList').onclick = onListClick;
+$('#tgList').onclick = onListClick;
 
 // settings
 $$('#langSeg button').forEach(b => (b.onclick = async () => { S = await vpn.settings({ lang: b.dataset.v }); render(); }));

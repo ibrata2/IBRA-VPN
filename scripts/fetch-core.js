@@ -10,7 +10,7 @@ const target = process.argv[2] === 'host' ? process.platform : 'win32';
 const CORE = path.join(__dirname, '..', 'core');
 const exe = target === 'win32' ? 'sing-box.exe' : 'sing-box';
 
-if (fs.existsSync(path.join(CORE, exe)) && !process.env.FORCE) { console.log('core present:', exe); process.exit(0); }
+if (fs.existsSync(path.join(CORE, exe)) && fs.existsSync(path.join(CORE, 'rules', 'geosite-meta.srs')) && !process.env.FORCE) { console.log('core present:', exe); process.exit(0); }
 fs.mkdirSync(CORE, { recursive: true });
 
 const name = target === 'win32' ? `sing-box-${VERSION}-windows-amd64` : `sing-box-${VERSION}-linux-amd64`;
@@ -41,5 +41,10 @@ function get(u, dest, n = 0) {
   const dir = path.join(x, name);
   for (const f of fs.readdirSync(dir)) fs.copyFileSync(path.join(dir, f), path.join(CORE, f));
   if (target !== 'win32') fs.chmodSync(path.join(CORE, exe), 0o755);
-  console.log('core ready:', fs.readdirSync(CORE).join(', '));
+  // bundled rule sets (no download needed when connecting)
+  const { RULESET_URL } = require('../src/core/config');
+  const rules = path.join(CORE, 'rules');
+  fs.mkdirSync(rules, { recursive: true });
+  for (const [tag, u] of Object.entries(RULESET_URL)) { await get(u, path.join(rules, tag + '.srs')); }
+  console.log('core ready:', fs.readdirSync(CORE).join(', '), '| rules:', fs.readdirSync(rules).length);
 })().catch(e => { console.error(e); process.exit(1); });

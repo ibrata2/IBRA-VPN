@@ -1,7 +1,7 @@
 {
   "name": "ibra-vpn",
   "productName": "IBRA VPN",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "IBRA VPN — فتح المواقع والتطبيقات المحجوبة. برمجة وتطوير ابراهيم الخزرجي",
   "author": "Ibrahim Al-Khazraji (IBRAPROGRAM)",
   "license": "SEE LICENSE IN LICENSE",
@@ -41,7 +41,8 @@
         "filter": [
           "sing-box.exe",
           "libcronet.dll",
-          "LICENSE"
+          "LICENSE",
+          "rules/*.srs"
         ]
       }
     ],

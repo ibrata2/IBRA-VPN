@@ -216,3 +216,14 @@ input[type="number"] { width: 90px; }
 #modalBtns button { flex: 1 1 45%; }
 
 .add-box textarea::-webkit-scrollbar { display: none; }
+
+.warn { background: color-mix(in srgb, var(--mid) 13%, transparent); border: 1px solid color-mix(in srgb, var(--mid) 45%, transparent); padding: 10px 12px; border-radius: 12px; margin-bottom: 12px; font-size: 13px; line-height: 1.6; }
+.qhint { display: block; color: var(--muted); font-size: 11px; font-weight: 400; line-height: 1.4; }
+.qrow.disabled { opacity: .4; pointer-events: none; }
+.qrow > span { padding: 6px 0; }
+
+.tg-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
+.tg-list:empty { display: none; }
+.tg-list h3 { margin: 2px 0 0; color: var(--text); font-size: 14px; }
+.tg-hint { margin: 0 0 4px; }
+.badge.tgb { color: #2aabee; border-color: rgba(42,171,238,.4); }

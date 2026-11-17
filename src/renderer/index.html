@@ -34,6 +34,7 @@
       <div class="status" id="statusText"></div>
       <div class="timer" id="timer">00:00:00</div>
       <div class="error" id="errorBox" hidden></div>
+      <div class="warn" id="warnBox" hidden></div>
 
       <button class="card server-card" id="serverCard">
         <div class="sc-icon" id="scIcon"></div>
@@ -63,6 +64,7 @@
           <span data-i="routeLabel"></span>
           <div class="mini-seg" id="routeSeg"><button data-v="global" data-i="routeGlobal"></button><button data-v="smart" data-i="routeSmart"></button></div>
         </div>
+        <label class="qrow switch-row"><span><span data-i="socialDirect"></span><small class="qhint" data-i="socialHint"></small></span><input type="checkbox" id="socialToggle"><i class="switch"></i></label>
         <label class="qrow switch-row"><span data-i="blockAds"></span><input type="checkbox" id="adsToggle"><i class="switch"></i></label>
       </div>
     </section>
@@ -79,6 +81,7 @@
         <small class="hint" data-i="addHint"></small>
       </div>
 
+      <div class="tg-list" id="tgList"></div>
       <div class="subs" id="subsList"></div>
 
       <div class="toolbar">
