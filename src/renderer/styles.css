@@ -237,3 +237,5 @@ input[type="number"] { width: 90px; }
 .fetch-prog .bar i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--accent), var(--accent2)); transition: width .3s; }
 .fetch-prog small { display: block; color: var(--muted); font-size: 11px; margin-top: 4px; }
 .badge.free { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 40%, transparent); }
+.ping, .badge, .stat b, .timer, .ip-card small, .srv small, .sc-sub, .fetch-prog small { unicode-bidi: isolate; }
+.ping { unicode-bidi: isolate; direction: ltr; display: inline-block; }
