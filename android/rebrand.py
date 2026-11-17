@@ -67,7 +67,7 @@ def cfg(s):
     s = s.replace('const val APP_ISSUES_URL = "$APP_URL/issues"', 'const val APP_ISSUES_URL = "https://t.me/ibraprogram"')
     s = s.replace('const val APP_PROMOTION_URL = "aHR0cHM6Ly85LjIzNDQ1Ni54eXovYWJjLmh0bWw="', 'const val APP_PROMOTION_URL = ""')
     if 'IBRA_TIKTOK_URL' not in s:
-        s = s.replace('const val TG_CHANNEL_URL', 'const val IBRA_TIKTOK_URL = "https://www.tiktok.com/@ibraprogram"\n    const val TG_CHANNEL_URL', 1)
+        s = s.replace('const val TG_CHANNEL_URL', 'const val IBRA_TIKTOK_URL = "https://www.tiktok.com/@ibraprogram"\n    const val IBRA_SITE_URL = "https://ibraprogram.netlify.app/"\n    const val TG_CHANNEL_URL', 1)
     return s
 edit(os.path.join(pkg, 'AppConfig.kt'), cfg)
 
@@ -76,7 +76,12 @@ def about(s):
     block = '''            SettingsMenuItem(
                 icon = painterResource(R.drawable.ic_telegram_24dp),
                 title = "برمجة وتطوير ابراهيم الخزرجي",
-                onClick = { Utils.openUri(context, AppConfig.TG_CHANNEL_URL) }
+                onClick = { Utils.openUri(context, AppConfig.IBRA_SITE_URL) }
+            )
+            SettingsMenuItem(
+                icon = painterResource(R.drawable.ic_source_code_24dp),
+                title = "كل تطبيقاتي · ibraprogram.netlify.app",
+                onClick = { Utils.openUri(context, AppConfig.IBRA_SITE_URL) }
             )
             SettingsMenuItem(
                 icon = painterResource(R.drawable.ic_telegram_24dp),

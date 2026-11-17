@@ -28,6 +28,27 @@ for f in glob.glob(os.path.join(apple, '**', 'InfoPlist.xcstrings'), recursive=T
     t = open(f, encoding='utf-8').read()
     open(f, 'w', encoding='utf-8').write(t.replace('"sing-box"', '"IBRA VPN"'))
 
+# Settings: IBRA section (site, Telegram, TikTok, credit) above "About"
+sv = os.path.join(apple, 'ApplicationLibrary', 'Views', 'Setting', 'SettingView.swift')
+t = open(sv, encoding='utf-8').read()
+anchor = '                Section("About") {'
+if anchor not in t: raise SystemExit('rebrand: SettingView anchor not found')
+ibra = '''                Section(header: Text("برمجة وتطوير ابراهيم الخزرجي")) {
+                    FormLink(destination: URL(string: "https://ibraprogram.netlify.app/")!) {
+                        Label("كل تطبيقاتي · ibraprogram.netlify.app", systemImage: "globe")
+                    }
+                    FormLink(destination: URL(string: "https://t.me/ibraprogram")!) {
+                        Label("Telegram · ibraprogram", systemImage: "paperplane.fill")
+                    }
+                    FormLink(destination: URL(string: "https://www.tiktok.com/@ibraprogram")!) {
+                        Label("TikTok · ibraprogram", systemImage: "music.note")
+                    }
+                }
+'''
+if 'ibraprogram.netlify.app' not in t:
+    t = t.replace(anchor, ibra + anchor, 1)
+    open(sv, 'w', encoding='utf-8').write(t)
+
 os.makedirs(ent_out, exist_ok=True)
 def plist(app_id, extra=''):
     return f'''<?xml version="1.0" encoding="UTF-8"?>

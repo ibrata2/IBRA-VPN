@@ -239,3 +239,5 @@ input[type="number"] { width: 90px; }
 .badge.free { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 40%, transparent); }
 .ping, .badge, .stat b, .timer, .ip-card small, .srv small, .sc-sub, .fetch-prog small { unicode-bidi: isolate; }
 .ping { unicode-bidi: isolate; direction: ltr; display: inline-block; }
+
+.link.site{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 14%,var(--glass))}.link.site svg{color:var(--accent)}

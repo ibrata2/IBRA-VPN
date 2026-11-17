@@ -4,8 +4,7 @@ name: Android APK
 # to the release of the same version as the Windows app (package.json).
 on:
   workflow_dispatch:
-  push:
-    paths: ['android/**', '.github/workflows/android.yml']
+  workflow_call:
 
 permissions:
   contents: write

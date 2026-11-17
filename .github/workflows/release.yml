@@ -24,3 +24,13 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npx electron-builder --win nsis --x64 --publish always
+
+  android:
+    needs: windows
+    uses: ./.github/workflows/android.yml
+    secrets: inherit
+
+  ios:
+    needs: windows
+    uses: ./.github/workflows/ios.yml
+    secrets: inherit

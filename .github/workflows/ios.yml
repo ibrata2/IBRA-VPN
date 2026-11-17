@@ -5,8 +5,7 @@ name: iOS IPA
 # with a paid Apple developer account. Attached to the release of the same version.
 on:
   workflow_dispatch:
-  push:
-    paths: ['ios/**', '.github/workflows/ios.yml']
+  workflow_call:
 
 permissions:
   contents: write
