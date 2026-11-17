@@ -115,14 +115,17 @@ object IbraSeed {
 
     fun run(context: Context) {
         val prefs = context.getSharedPreferences("ibra_seed", Context.MODE_PRIVATE)
-        if (prefs.getBoolean("subs_v1", false)) return
+        if (prefs.getBoolean("seed_v2", false)) return
         try {
             val existing = MmkvManager.decodeSubscriptions().map { it.subscription.url }.toSet()
             for ((name, url) in SUBS) {
                 if (url in existing) continue
                 MmkvManager.encodeSubscription("", SubscriptionItem(remarks = name, url = url, autoUpdate = true, updateInterval = 360))
             }
-            prefs.edit().putBoolean("subs_v1", true).apply()
+            // IBRA look everywhere: dark theme with the app's red colours (no wallpaper colours)
+            MmkvManager.encodeSettings(AppConfig.PREF_UI_MODE_NIGHT, "2")
+            MmkvManager.encodeSettings(AppConfig.PREF_DYNAMIC_COLOR, false)
+            prefs.edit().putBoolean("seed_v2", true).apply()
         } catch (_: Throwable) { }
     }
 }

@@ -144,8 +144,17 @@ class IbraHomeActivity : HelperBaseComponentActivity() {
         serverCount = all.size
         val guid = MmkvManager.getSelectServer()
         val cfg = guid?.let { MmkvManager.decodeServerConfig(it) }
-        serverName = cfg?.remarks.orEmpty()
+        serverName = cfg?.let { cleanName(it.remarks, it.configType.name, it.server.orEmpty()) }.orEmpty()
         serverPing = guid?.let { MmkvManager.decodeServerAffiliationInfo(it)?.testDelayMillis } ?: 0L
+    }
+
+    /** Free lists put channel ads in the server name; show a clean name instead. */
+    private fun cleanName(remarks: String, type: String, host: String): String {
+        val junk = remarks.isBlank() || remarks.contains('@') || remarks.contains("http", true) ||
+            remarks.contains("t.me", true) || remarks.contains("channel", true) || remarks.contains("کانال") ||
+            remarks.contains("قناة") || remarks.contains("تلگرام") || remarks.contains("جنل") || remarks.length > 30
+        val proto = type.lowercase().replaceFirstChar { it.uppercase() }.replace("Shadowsocks", "SS")
+        return if (junk) "⚡ سيرفر سريع · $proto" else remarks
     }
 
     private fun toggle() {
@@ -309,7 +318,7 @@ class IbraHomeActivity : HelperBaseComponentActivity() {
                         contentAlignment = Alignment.Center
                     ) {
                         if (busy) CircularProgressIndicator(color = Color.White, strokeWidth = 4.dp, modifier = Modifier.size(54.dp))
-                        else Text("⏻", color = if (running) Color.White else Color.Gray, fontSize = 60.sp, fontWeight = FontWeight.Bold)
+                        else PowerIcon(if (running) Color.White else Color.Gray)
                     }
                 }
                 Text(
@@ -325,10 +334,29 @@ class IbraHomeActivity : HelperBaseComponentActivity() {
                 if (serverName.isNotEmpty()) {
                     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Color(0x0AFFFFFF)).padding(12.dp)) {
                         Text(serverName, color = Color.White, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                        if (serverPing > 0) Text("$serverPing ms", color = Color(0xFF3DDC84), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        if (serverPing > 0) Text("\u200E$serverPing ms", color = Color(0xFF3DDC84), fontSize = 12.sp, fontWeight = FontWeight.Bold)
                     }
                 }
             }
+        }
+    }
+
+    @Composable
+    private fun PowerIcon(color: Color) {
+        androidx.compose.foundation.Canvas(Modifier.size(58.dp)) {
+            val stroke = size.minDimension * 0.11f
+            val pad = stroke
+            drawArc(
+                color = color, startAngle = -60f, sweepAngle = 300f, useCenter = false,
+                topLeft = androidx.compose.ui.geometry.Offset(pad, pad),
+                size = androidx.compose.ui.geometry.Size(size.width - pad * 2, size.height - pad * 2),
+                style = androidx.compose.ui.graphics.drawscope.Stroke(width = stroke, cap = androidx.compose.ui.graphics.StrokeCap.Round)
+            )
+            drawLine(
+                color = color, start = androidx.compose.ui.geometry.Offset(size.width / 2, pad * 0.3f),
+                end = androidx.compose.ui.geometry.Offset(size.width / 2, size.height * 0.48f),
+                strokeWidth = stroke, cap = androidx.compose.ui.graphics.StrokeCap.Round
+            )
         }
     }
 
@@ -339,10 +367,10 @@ class IbraHomeActivity : HelperBaseComponentActivity() {
             Text(if (serverCount > 0) "$serverCount سيرفر — نفحصها ونختار الأسرع تلقائياً" else "اضغط \"جلب سيرفرات جديدة\" حتى تنزل السيرفرات", color = Muted, fontSize = 13.sp)
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Button(onClick = { fetchServers() }, enabled = !busy, colors = ButtonDefaults.buttonColors(containerColor = IbraRed), modifier = Modifier.weight(1f)) {
-                    Text("جلب سيرفرات جديدة", fontWeight = FontWeight.Bold)
+                    Text("جلب سيرفرات", fontWeight = FontWeight.Bold, fontSize = 14.sp, maxLines = 1)
                 }
                 OutlinedButton(onClick = { startActivity(Intent(this@IbraHomeActivity, MainActivity::class.java)) }, border = BorderStroke(1.dp, Color(0x33FFFFFF)), modifier = Modifier.weight(1f)) {
-                    Text("كل السيرفرات", color = Color.White)
+                    Text("كل السيرفرات", color = Color.White, fontSize = 14.sp, maxLines = 1)
                 }
             }
             Text("✓ يدعم VLESS · VMess · Trojan · Shadowsocks · Hysteria2 والاشتراكات — تضيفها من \"كل السيرفرات\"", color = Muted, fontSize = 11.sp)
