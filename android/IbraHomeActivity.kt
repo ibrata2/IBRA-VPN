@@ -366,11 +366,11 @@ class IbraHomeActivity : HelperBaseComponentActivity() {
             Text("السيرفرات المجانية", color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Bold)
             Text(if (serverCount > 0) "$serverCount سيرفر — نفحصها ونختار الأسرع تلقائياً" else "اضغط \"جلب سيرفرات جديدة\" حتى تنزل السيرفرات", color = Muted, fontSize = 13.sp)
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Button(onClick = { fetchServers() }, enabled = !busy, colors = ButtonDefaults.buttonColors(containerColor = IbraRed), modifier = Modifier.weight(1f)) {
-                    Text("جلب سيرفرات", fontWeight = FontWeight.Bold, fontSize = 14.sp, maxLines = 1)
+                Button(onClick = { fetchServers() }, enabled = !busy, colors = ButtonDefaults.buttonColors(containerColor = IbraRed), contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 6.dp, vertical = 10.dp), modifier = Modifier.weight(1f)) {
+                    Text("جلب سيرفرات", fontWeight = FontWeight.Bold, fontSize = 14.sp, maxLines = 1, softWrap = false)
                 }
-                OutlinedButton(onClick = { startActivity(Intent(this@IbraHomeActivity, MainActivity::class.java)) }, border = BorderStroke(1.dp, Color(0x33FFFFFF)), modifier = Modifier.weight(1f)) {
-                    Text("كل السيرفرات", color = Color.White, fontSize = 14.sp, maxLines = 1)
+                OutlinedButton(onClick = { startActivity(Intent(this@IbraHomeActivity, MainActivity::class.java)) }, border = BorderStroke(1.dp, Color(0x33FFFFFF)), contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 6.dp, vertical = 10.dp), modifier = Modifier.weight(1f)) {
+                    Text("كل السيرفرات", color = Color.White, fontSize = 14.sp, maxLines = 1, softWrap = false)
                 }
             }
             Text("✓ يدعم VLESS · VMess · Trojan · Shadowsocks · Hysteria2 والاشتراكات — تضيفها من \"كل السيرفرات\"", color = Muted, fontSize = 11.sp)
