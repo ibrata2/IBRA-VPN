@@ -60,8 +60,8 @@ function applyLang() {
 
 const darkMQ = matchMedia('(prefers-color-scheme: dark)');
 function applyTheme() {
-  let th = S.settings.theme || 'gold';
-  if (th === 'system') th = darkMQ.matches ? 'gold' : 'light';
+  let th = S.settings.theme || 'red';
+  if (th === 'system') th = darkMQ.matches ? 'red' : 'light';
   document.documentElement.dataset.theme = th;
 }
 darkMQ.addEventListener('change', () => S && applyTheme());
@@ -103,7 +103,8 @@ function renderHome() {
   if (S.engine === 'warp') { name = T('warpName'); sub = T('warpDesc'); proto = 'warp'; id = 'warp'; }
   else if (S.engine === 'bypass') { name = T('bypassName'); sub = T('bypassDesc'); proto = 'bypass'; id = 'bypass'; }
   else {
-    const s = S.servers.find(x => x.id === S.selected) || S.servers[0];
+    const vs = S.servers.filter(x => x.protocol !== 'mtproto');
+    const s = vs.find(x => x.id === S.selected) || vs[0];
     if (s) { name = s.name; sub = `${PROTO[s.protocol] || s.protocol} · ${s.outbound.server}`; proto = s.protocol; id = s.id; }
     else { name = T('noServer'); sub = T('tapToChoose'); proto = ''; }
   }

@@ -18,7 +18,7 @@
 [data-theme="red"] {
   --bg: #0b0b0e; --bg2: #151216; --glass: rgba(255,255,255,.045); --glass2: rgba(255,255,255,.08);
   --line: rgba(224,38,47,.22); --line2: rgba(255,255,255,.07);
-  --text: #f5f1f1; --muted: #a09596; --accent: #e0262f; --accent2: #ff6b6b; --accent-ink: #fff;
+  --text: #f5f1f1; --muted: #a3a3a8; --accent: #e3141c; --accent2: #ff4a50; --accent-ink: #fff;
   --glow: rgba(224,38,47,.38); --halo: radial-gradient(circle at 50% 0%, rgba(224,38,47,.18), transparent 60%);
 }
 [data-theme="light"] {

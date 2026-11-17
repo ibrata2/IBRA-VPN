@@ -35,7 +35,7 @@ const DEFAULTS = {
   warpAccount: null,
   warpEndpoint: { host: warp.WARP_ENDPOINTS[0], port: 2408 },
   settings: {
-    lang: 'ar', theme: 'gold', mode: 'proxy', routing: 'global', blockAds: false, dns: 'cloudflare',
+    lang: 'ar', theme: 'red', mode: 'proxy', routing: 'global', blockAds: false, dns: 'cloudflare',
     mixedPort: 20808, apiPort: 20809, socialDirect: true, autoStart: false, autoConnect: false, startHidden: false,
     closeToTray: true, autoUpdate: true
   },
@@ -88,7 +88,7 @@ function createWindow(show = true) {
   win = new BrowserWindow({
     width: 430, height: 760, minWidth: 400, minHeight: 640,
     frame: false, transparent: false, resizable: true, show: false,
-    backgroundColor: '#0b0b0d', icon: ICON, title: 'IBRA VPN',
+    backgroundColor: '#0b0b0e', icon: ICON, title: 'IBRA VPN',
     webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true }
   });
   win.setMenuBarVisibility(false);
