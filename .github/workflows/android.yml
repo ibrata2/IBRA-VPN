@@ -114,6 +114,13 @@ jobs:
         with:
           name: android-test-screenshots
           path: shots/
+      - name: Publish screenshots to the ci-shots branch
+        if: always()
+        run: |
+          mkdir -p /tmp/pub && cp shots/*.png /tmp/pub/ 2>/dev/null || true
+          cd /tmp/pub && git init -q -b ci-shots && git add -A
+          git -c user.name="IBRA VPN bot" -c user.email="ibraprogram@users.noreply.github.com" commit -qm "Android test screenshots ${{ github.run_id }}" || exit 0
+          git push -q -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" ci-shots
 
   release:
     needs: [build, test]
