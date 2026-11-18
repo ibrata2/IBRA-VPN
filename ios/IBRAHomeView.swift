@@ -1,4 +1,4 @@
-// IBRA VPN — iPhone home screen. برمجة وتطوير ابراهيم الخزرجي
+// IBRA VPN — iPhone interface (same layout as the Windows app). برمجة وتطوير ابراهيم الخزرجي
 // Copied into sing-box-for-apple/ApplicationLibrary/Views/Dashboard by ios/rebrand.py.
 #if os(iOS)
     import Foundation
@@ -11,6 +11,7 @@
         public static let profileName = "IBRA VPN — سيرفرات مجانية"
         public static let profileURL = "https://raw.githubusercontent.com/ibrata2/IBRA-VPN/main/profiles/free.json"
         public static let tgListURL = "https://raw.githubusercontent.com/SoliSpirit/mtproto/master/all_proxies.txt"
+        public static let releaseAPI = "https://api.github.com/repos/ibrata2/IBRA-VPN/releases/latest"
         public static let builtinTG = [
             "tg://proxy?server=fast.strobox.info&port=443&secret=ddf0eeb0bd9adc4fd4a93994ee3b2a216b",
             "tg://proxy?server=Tond.strobox.info&port=443&secret=ddf0eeb0bd9adc4fd4a93994ee3b2a216b",
@@ -20,10 +21,28 @@
         public static let tiktokURL = "https://www.tiktok.com/@ibraprogram"
         static let red = Color(red: 0.89, green: 0.08, blue: 0.11)
         static let red2 = Color(red: 1.0, green: 0.29, blue: 0.31)
+        static let muted = Color(white: 0.64)
+        public static var version: String {
+            (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String) ?? "1.0"
+        }
     }
 
     public enum IBRASeed {
-        /// Adds the free servers profile once and makes sure a profile is selected.
+        /// True when the packet-tunnel extension (the VPN engine) is inside the installed app.
+        public static var hasTunnelExtension: Bool {
+            guard let url = Bundle.main.builtInPlugInsURL,
+                  let items = try? FileManager.default.contentsOfDirectory(at: url, includingPropertiesForKeys: nil) else { return false }
+            for item in items where item.pathExtension == "appex" {
+                if let bundle = Bundle(url: item),
+                   let ext = bundle.object(forInfoDictionaryKey: "NSExtension") as? [String: Any],
+                   (ext["NSExtensionPointIdentifier"] as? String) == "com.apple.networkextension.packet-tunnel"
+                {
+                    return true
+                }
+            }
+            return false
+        }
+
         public nonisolated static func ensureProfile() async throws {
             let all = try await ProfileManager.list()
             let selected = await SharedPreferences.selectedProfileID.get()
@@ -51,7 +70,6 @@
             await SharedPreferences.selectedProfileID.set(profile.mustID)
         }
 
-        /// Downloads the newest free server list. Returns the number of servers in it.
         public nonisolated static func updateServers() async throws -> Int {
             try await ensureProfile()
             guard let profile = try await ProfileManager.list().first(where: { $0.remoteURL == IBRAConfig.profileURL }) else { return 0 }
@@ -82,48 +100,86 @@
             }
             return out
         }
+
+        /// Latest published version, or nil if it can't be checked.
+        public nonisolated static func latestVersion() async -> String? {
+            guard let text = try? await HTTPClient.getStringAsync(IBRAConfig.releaseAPI),
+                  let json = try? JSONSerialization.jsonObject(with: Data(text.utf8)) as? [String: Any],
+                  let tag = json["tag_name"] as? String else { return nil }
+            return tag.hasPrefix("v") ? String(tag.dropFirst()) : tag
+        }
+
+        public static func isNewer(_ a: String, than b: String) -> Bool {
+            let pa = a.split(separator: ".").map { Int($0) ?? 0 }
+            let pb = b.split(separator: ".").map { Int($0) ?? 0 }
+            for i in 0 ..< max(pa.count, pb.count) {
+                let x = i < pa.count ? pa[i] : 0, y = i < pb.count ? pb[i] : 0
+                if x != y { return x > y }
+            }
+            return false
+        }
     }
 
-    public struct IBRAHomeView: View {
+    private enum IBRATab: Int, CaseIterable {
+        case home, servers, settings, about
+        var title: String {
+            switch self {
+            case .home: return "الرئيسية"
+            case .servers: return "السيرفرات"
+            case .settings: return "الإعدادات"
+            case .about: return "حول"
+            }
+        }
+
+        var icon: String {
+            switch self {
+            case .home: return "power"
+            case .servers: return "server.rack"
+            case .settings: return "gearshape.fill"
+            case .about: return "info.circle"
+            }
+        }
+    }
+
+    /// Root of the iPhone app: four tabs like the Windows app.
+    public struct IBRARootView: View {
         @EnvironmentObject private var environments: ExtensionEnvironments
+        @State private var tab: IBRATab = .home
         @State private var note: String?
-        @State private var working = false
         @State private var serverCount = 0
+        @State private var working = false
         @State private var tgProxies: [String] = IBRAConfig.builtinTG
         @State private var loadingTG = false
         @State private var showGroups = false
         @State private var showAdvanced = false
+        @State private var showLogs = false
+        @State private var updateText = ""
+        @State private var newVersion: String?
+        @State private var checkingUpdate = false
 
         public init() {}
 
         public var body: some View {
-            ScrollView {
-                VStack(spacing: 16) {
-                    header
-                    if let profile = environments.extensionProfile {
-                        IBRAPowerCard(profile: profile, note: $note, onConnected: {
-                            environments.commandClient.connect()
-                        })
-                    } else {
-                        installCard
+            VStack(spacing: 0) {
+                header
+                ScrollView {
+                    VStack(spacing: 14) {
+                        if let note { noteView(note) }
+                        switch tab {
+                        case .home: homePage
+                        case .servers: serversPage
+                        case .settings: settingsPage
+                        case .about: aboutPage
+                        }
                     }
-                    if let note {
-                        Text(note)
-                            .font(.footnote.weight(.semibold))
-                            .foregroundStyle(.white)
-                            .padding(12)
-                            .frame(maxWidth: .infinity)
-                            .background(RoundedRectangle(cornerRadius: 14).fill(IBRAConfig.red.opacity(0.25)))
-                    }
-                    serversCard
-                    telegramCard
-                    aboutCard
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
                 }
-                .padding(.horizontal, 18)
-                .padding(.vertical, 12)
+                tabBar
             }
             .background(
-                RadialGradient(colors: [Color(red: 0.25, green: 0.02, blue: 0.04), .black], center: .top, startRadius: 10, endRadius: 650)
+                RadialGradient(colors: [Color(red: 0.25, green: 0.02, blue: 0.04), Color(red: 0.04, green: 0.04, blue: 0.05)],
+                               center: .top, startRadius: 10, endRadius: 700)
                     .ignoresSafeArea()
             )
             .environment(\.layoutDirection, .rightToLeft)
@@ -131,32 +187,107 @@
             .task { await firstRun() }
             .sheet(isPresented: $showGroups) {
                 NavigationView {
-                    GroupListView()
-                        .environmentObject(environments)
-                        .navigationTitle("اختيار السيرفر")
-                        .navigationBarTitleDisplayMode(.inline)
+                    GroupListView().environmentObject(environments)
+                        .navigationTitle("اختيار السيرفر").navigationBarTitleDisplayMode(.inline)
                 }
             }
             .sheet(isPresented: $showAdvanced) {
                 NavigationView {
-                    DashboardView()
-                        .environmentObject(environments)
-                        .navigationTitle("الإعدادات المتقدمة")
-                        .navigationBarTitleDisplayMode(.inline)
+                    SettingView().environmentObject(environments)
+                        .navigationTitle("الإعدادات المتقدمة").navigationBarTitleDisplayMode(.inline)
+                }
+            }
+            .sheet(isPresented: $showLogs) {
+                NavigationView {
+                    LogView().environmentObject(environments)
+                        .navigationTitle("السجل").navigationBarTitleDisplayMode(.inline)
                 }
             }
         }
 
+        // MARK: header & tab bar
+
         private var header: some View {
-            HStack(spacing: 10) {
-                Image(systemName: "shield.lefthalf.filled")
-                    .font(.system(size: 26, weight: .bold))
-                    .foregroundStyle(IBRAConfig.red)
-                Text("IBRA ").font(.system(size: 26, weight: .heavy)) + Text("VPN").font(.system(size: 26, weight: .heavy)).foregroundColor(IBRAConfig.red)
+            HStack(spacing: 8) {
+                Image(systemName: "shield.lefthalf.filled").font(.system(size: 22, weight: .bold)).foregroundStyle(IBRAConfig.red)
+                Text("IBRA ").font(.system(size: 22, weight: .heavy)) + Text("VPN").font(.system(size: 22, weight: .heavy)).foregroundColor(IBRAConfig.red)
                 Spacer()
             }
             .environment(\.layoutDirection, .leftToRight)
-            .padding(.top, 6)
+            .padding(.horizontal, 18).padding(.top, 8).padding(.bottom, 4)
+        }
+
+        private var tabBar: some View {
+            HStack {
+                ForEach(IBRATab.allCases, id: \.rawValue) { t in
+                    Button {
+                        tab = t
+                        note = nil
+                    } label: {
+                        VStack(spacing: 3) {
+                            Image(systemName: t.icon).font(.system(size: 19, weight: .semibold))
+                            Text(t.title).font(.system(size: 11, weight: .semibold))
+                        }
+                        .frame(maxWidth: .infinity)
+                        .foregroundStyle(tab == t ? IBRAConfig.red2 : IBRAConfig.muted)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.top, 8).padding(.bottom, 4)
+            .background(Color.black.opacity(0.55).ignoresSafeArea(edges: .bottom))
+            .overlay(Rectangle().fill(Color.white.opacity(0.07)).frame(height: 1), alignment: .top)
+        }
+
+        private func noteView(_ text: String) -> some View {
+            Text(text)
+                .font(.footnote.weight(.semibold)).foregroundStyle(.white).multilineTextAlignment(.center)
+                .padding(12).frame(maxWidth: .infinity)
+                .background(RoundedRectangle(cornerRadius: 14).fill(IBRAConfig.red.opacity(0.25)))
+                .onTapGesture { note = nil }
+        }
+
+        // MARK: home
+
+        @ViewBuilder
+        private var homePage: some View {
+            if !IBRASeed.hasTunnelExtension {
+                engineMissingCard
+            } else if let profile = environments.extensionProfile {
+                IBRAPowerCard(profile: profile, note: $note, onConnected: { environments.commandClient.connect() })
+            } else {
+                installCard
+            }
+            VStack(alignment: .leading, spacing: 10) {
+                Label("السيرفر", systemImage: "bolt.fill").font(.headline)
+                Text(serverCount > 0 ? "⚡ تلقائي — الأسرع من \(serverCount) سيرفر" : "يتم تجهيز السيرفرات…")
+                    .font(.subheadline).foregroundStyle(IBRAConfig.muted)
+                HStack(spacing: 10) {
+                    Button { Task { await refreshServers() } } label: {
+                        Text(working ? "جاري التحديث…" : "جلب سيرفرات").lineLimit(1).frame(maxWidth: .infinity).padding(.vertical, 10)
+                    }
+                    .buttonStyle(.borderedProminent).tint(IBRAConfig.red).disabled(working)
+                    Button { tab = .servers } label: {
+                        Text("كل السيرفرات").lineLimit(1).frame(maxWidth: .infinity).padding(.vertical, 10)
+                    }
+                    .buttonStyle(.bordered).tint(.white)
+                }
+            }
+            .padding(16).ibraCard()
+            Label("انستغرام وفيسبوك وواتساب تشتغل بالـ IP الحقيقي — حماية من التحقق والحظر", systemImage: "checkmark.shield.fill")
+                .font(.footnote.weight(.semibold)).foregroundStyle(.green)
+                .padding(14).frame(maxWidth: .infinity, alignment: .leading).ibraCard()
+        }
+
+        private var engineMissingCard: some View {
+            VStack(spacing: 10) {
+                Image(systemName: "exclamationmark.triangle.fill").font(.system(size: 40)).foregroundStyle(.yellow)
+                Text("محرك الـ VPN مو موجود بهذي النسخة").font(.headline)
+                Text("طريقة التنصيب حذفت محرك الـ VPN من التطبيق. نصّب ملف IPA بالـ TrollStore، أو وقّعه بحساب مطوّر Apple مدفوع (يدعم VPN). التوقيع بحساب مجاني أو ببعض الشهادات العامة يحذف المحرك.")
+                    .font(.footnote).foregroundStyle(IBRAConfig.muted).multilineTextAlignment(.center)
+                Text("بروكسيات تليكرام تشتغل عادي من صفحة السيرفرات 👇").font(.footnote.weight(.semibold))
+            }
+            .padding(18).frame(maxWidth: .infinity).ibraCard()
         }
 
         private var installCard: some View {
@@ -164,7 +295,7 @@
                 Image(systemName: "lock.shield").font(.system(size: 44)).foregroundStyle(IBRAConfig.red)
                 Text("خطوة وحدة قبل أول اتصال").font(.headline)
                 Text("اضغط الزر واسمح بإضافة إعدادات VPN حتى يشتغل التطبيق.")
-                    .font(.subheadline).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                    .font(.subheadline).foregroundStyle(IBRAConfig.muted).multilineTextAlignment(.center)
                 Button {
                     Task {
                         do {
@@ -174,57 +305,49 @@
                         } catch { note = "تعذر التفعيل: \(error.localizedDescription)" }
                     }
                 } label: {
-                    Text("تفعيل IBRA VPN").font(.headline).frame(maxWidth: .infinity).padding(.vertical, 14)
+                    Text("تفعيل IBRA VPN").font(.headline).frame(maxWidth: .infinity).padding(.vertical, 12)
                 }
                 .buttonStyle(.borderedProminent).tint(IBRAConfig.red)
             }
-            .padding(20)
-            .ibraCard()
+            .padding(20).ibraCard()
         }
 
-        private var serversCard: some View {
+        // MARK: servers
+
+        @ViewBuilder
+        private var serversPage: some View {
             VStack(alignment: .leading, spacing: 12) {
                 Label("السيرفرات المجانية", systemImage: "server.rack").font(.headline)
-                Text(serverCount > 0 ? "\(serverCount) سيرفر — التطبيق يختار الأسرع تلقائياً، وتتحدث كل 6 ساعات" : "يتم تجهيز السيرفرات…")
-                    .font(.subheadline).foregroundStyle(.secondary)
-                HStack(spacing: 10) {
-                    Button {
-                        Task { await refreshServers() }
-                    } label: {
-                        Label(working ? "جاري التحديث…" : "جلب سيرفرات جديدة", systemImage: "arrow.clockwise")
-                            .frame(maxWidth: .infinity).padding(.vertical, 10)
-                    }
-                    .buttonStyle(.borderedProminent).tint(IBRAConfig.red).disabled(working)
-                    Button {
-                        showGroups = true
-                    } label: {
-                        Label("اختيار سيرفر", systemImage: "list.bullet").frame(maxWidth: .infinity).padding(.vertical, 10)
-                    }
-                    .buttonStyle(.bordered).tint(.white)
-                    .disabled(environments.extensionProfile?.status.isConnectedStrict != true)
+                Text(serverCount > 0 ? "\(serverCount) سيرفر — التطبيق يفحصها ويختار الأسرع تلقائياً، وتتحدث كل 6 ساعات" : "اضغط جلب سيرفرات جديدة")
+                    .font(.subheadline).foregroundStyle(IBRAConfig.muted)
+                Button { Task { await refreshServers() } } label: {
+                    Label(working ? "جاري التحديث…" : "جلب سيرفرات جديدة", systemImage: "arrow.clockwise")
+                        .lineLimit(1).frame(maxWidth: .infinity).padding(.vertical, 11)
                 }
-                Label("انستغرام وفيسبوك وواتساب تشتغل بالـ IP الحقيقي — حماية من التحقق والحظر", systemImage: "checkmark.shield.fill")
-                    .font(.caption).foregroundStyle(.green)
-                Button("الإعدادات المتقدمة") { showAdvanced = true }
-                    .font(.caption).foregroundStyle(.secondary)
+                .buttonStyle(.borderedProminent).tint(IBRAConfig.red).disabled(working)
+                Button { showGroups = true } label: {
+                    Label("اختيار سيرفر معيّن", systemImage: "list.bullet").lineLimit(1).frame(maxWidth: .infinity).padding(.vertical, 11)
+                }
+                .buttonStyle(.bordered).tint(.white)
+                .disabled(environments.extensionProfile?.status.isConnectedStrict != true)
+                Text("اختيار سيرفر معيّن يشتغل بعد الاتصال").font(.caption).foregroundStyle(IBRAConfig.muted)
             }
-            .padding(16)
-            .ibraCard()
-        }
+            .padding(16).ibraCard()
 
-        private var telegramCard: some View {
             VStack(alignment: .leading, spacing: 10) {
                 Label("بروكسيات تليكرام", systemImage: "paperplane.fill").font(.headline)
-                Text("تشتغل داخل تليكرام فقط — اضغط اتصال وتليكرام يضيفها").font(.caption).foregroundStyle(.secondary)
+                Text("تشتغل داخل تليكرام فقط — اضغط اتصال وتليكرام يضيفها").font(.caption).foregroundStyle(IBRAConfig.muted)
                 ForEach(Array(tgProxies.enumerated()), id: \.offset) { index, link in
                     HStack {
-                        Text("بروكسي \(index + 1)").font(.subheadline.weight(.semibold))
-                        Text(host(of: link)).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("بروكسي \(index + 1)").font(.subheadline.weight(.semibold))
+                            Text(host(of: link)).font(.caption2).foregroundStyle(IBRAConfig.muted).lineLimit(1)
+                        }
                         Spacer()
                         if let url = URL(string: link) {
                             Link("اتصال", destination: url)
                                 .font(.subheadline.weight(.bold))
-                                .padding(.horizontal, 14).padding(.vertical, 6)
+                                .padding(.horizontal, 16).padding(.vertical, 7)
                                 .background(Capsule().fill(Color(red: 0.16, green: 0.67, blue: 0.93)))
                                 .foregroundStyle(.white)
                         }
@@ -235,49 +358,123 @@
                         loadingTG = true
                         let more = await IBRASeed.fetchTelegramProxies()
                         loadingTG = false
-                        if more.isEmpty { note = "تعذر جلب بروكسيات جديدة — جرّب بعد الاتصال" } else { tgProxies = IBRAConfig.builtinTG + more.filter { !IBRAConfig.builtinTG.contains($0) } }
+                        if more.isEmpty { note = "تعذر جلب بروكسيات جديدة — حاول مرة ثانية" }
+                        else { tgProxies = IBRAConfig.builtinTG + more.filter { !IBRAConfig.builtinTG.contains($0) } }
                     }
                 } label: {
-                    Label(loadingTG ? "جاري الجلب…" : "جلب بروكسيات جديدة", systemImage: "arrow.down.circle")
+                    Label(loadingTG ? "جاري الجلب…" : "جلب بروكسيات جديدة", systemImage: "arrow.down.circle").frame(maxWidth: .infinity).padding(.vertical, 9)
                 }
-                .font(.subheadline).disabled(loadingTG)
+                .buttonStyle(.bordered).tint(.white).disabled(loadingTG)
             }
-            .padding(16)
-            .ibraCard()
+            .padding(16).ibraCard()
         }
 
-        private var aboutCard: some View {
-            VStack(spacing: 10) {
+        // MARK: settings
+
+        @ViewBuilder
+        private var settingsPage: some View {
+            VStack(alignment: .leading, spacing: 12) {
+                Label("التحديثات", systemImage: "arrow.down.app.fill").font(.headline)
+                HStack {
+                    Text("الإصدار الحالي").foregroundStyle(IBRAConfig.muted)
+                    Spacer()
+                    Text("v\(IBRAConfig.version)").font(.system(.body, design: .monospaced))
+                }
+                if !updateText.isEmpty {
+                    Text(updateText).font(.subheadline.weight(.semibold))
+                        .foregroundStyle(newVersion != nil ? IBRAConfig.red2 : .green)
+                }
+                Button { Task { await checkUpdate() } } label: {
+                    Label(checkingUpdate ? "جاري البحث…" : "البحث عن تحديث", systemImage: "magnifyingglass")
+                        .frame(maxWidth: .infinity).padding(.vertical, 10)
+                }
+                .buttonStyle(.bordered).tint(.white).disabled(checkingUpdate)
+                if newVersion != nil, let url = URL(string: IBRAConfig.siteURL) {
+                    Link(destination: url) {
+                        Label("تحميل التحديث من موقعي", systemImage: "arrow.down.circle.fill")
+                            .font(.headline).frame(maxWidth: .infinity).padding(.vertical, 12)
+                            .background(RoundedRectangle(cornerRadius: 12).fill(IBRAConfig.red))
+                            .foregroundStyle(.white)
+                    }
+                }
+            }
+            .padding(16).ibraCard()
+
+            VStack(alignment: .leading, spacing: 12) {
+                Label("الاتصال", systemImage: "network").font(.headline)
+                settingRow("السيرفرات تتحدث تلقائياً", "كل 6 ساعات")
+                settingRow("اختيار السيرفر", "تلقائي — الأسرع")
+                settingRow("حماية انستا وفيس", "مفعّلة")
+                Divider().overlay(Color.white.opacity(0.1))
+                Button { showAdvanced = true } label: {
+                    Label("الإعدادات المتقدمة", systemImage: "slider.horizontal.3").frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .foregroundStyle(.white)
+                Button { showLogs = true } label: {
+                    Label("السجل", systemImage: "doc.text.magnifyingglass").frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .foregroundStyle(.white)
+            }
+            .padding(16).ibraCard()
+        }
+
+        private func settingRow(_ title: String, _ value: String) -> some View {
+            HStack {
+                Text(title)
+                Spacer()
+                Text(value).foregroundStyle(IBRAConfig.muted)
+            }
+            .font(.subheadline)
+        }
+
+        // MARK: about
+
+        private var aboutPage: some View {
+            VStack(spacing: 12) {
+                Image(systemName: "shield.lefthalf.filled").font(.system(size: 70)).foregroundStyle(IBRAConfig.red)
+                    .shadow(color: IBRAConfig.red.opacity(0.6), radius: 20)
+                (Text("IBRA ").font(.system(size: 30, weight: .heavy)) + Text("VPN").font(.system(size: 30, weight: .heavy)).foregroundColor(IBRAConfig.red))
+                    .environment(\.layoutDirection, .leftToRight)
+                Text("v\(IBRAConfig.version)").font(.footnote).foregroundStyle(IBRAConfig.muted)
+                Text("تطبيق اتصال آمن يفتح المواقع والتطبيقات المحجوبة مثل تليكرام، بسيرفرات مجانية تتحدث تلقائياً.")
+                    .font(.subheadline).foregroundStyle(IBRAConfig.muted).multilineTextAlignment(.center)
                 Text("برمجة وتطوير ابراهيم الخزرجي").font(.headline).foregroundStyle(IBRAConfig.red2)
+                    .padding(.vertical, 10).padding(.horizontal, 18)
+                    .background(RoundedRectangle(cornerRadius: 14).stroke(IBRAConfig.red.opacity(0.5)))
                 ibraLink("كل تطبيقاتي · ibraprogram.netlify.app", "globe", IBRAConfig.siteURL, highlight: true)
                 ibraLink("Telegram · ibraprogram", "paperplane.fill", IBRAConfig.telegramURL)
                 ibraLink("TikTok · ibraprogram", "music.note", IBRAConfig.tiktokURL)
+                Text("يعمل بمحرك sing-box مفتوح المصدر (GPLv3)").font(.caption2).foregroundStyle(IBRAConfig.muted)
             }
-            .padding(16)
-            .ibraCard()
+            .padding(18).frame(maxWidth: .infinity).ibraCard()
         }
 
         private func ibraLink(_ title: String, _ icon: String, _ url: String, highlight: Bool = false) -> some View {
             Link(destination: URL(string: url)!) {
                 Label(title, systemImage: icon)
                     .font(.subheadline.weight(.semibold))
-                    .frame(maxWidth: .infinity).padding(.vertical, 11)
+                    .frame(maxWidth: .infinity).padding(.vertical, 12)
                     .background(RoundedRectangle(cornerRadius: 12).fill(highlight ? IBRAConfig.red.opacity(0.22) : Color.white.opacity(0.06)))
                     .overlay(RoundedRectangle(cornerRadius: 12).stroke(highlight ? IBRAConfig.red : Color.white.opacity(0.1)))
             }
             .foregroundStyle(.white)
         }
 
+        // MARK: actions
+
         private func host(of link: String) -> String {
-            guard let comps = URLComponents(string: link) else { return "" }
-            return comps.queryItems?.first(where: { $0.name == "server" })?.value ?? ""
+            URLComponents(string: link)?.queryItems?.first(where: { $0.name == "server" })?.value ?? ""
         }
 
         private func firstRun() async {
             do { try await IBRASeed.ensureProfile() } catch {
-                note = "تعذر تحميل السيرفرات المجانية — تأكد من الإنترنت واضغط \"جلب سيرفرات جديدة\""
+                note = "تعذر تحميل السيرفرات المجانية — تأكد من الإنترنت واضغط \"جلب سيرفرات\""
             }
             serverCount = await IBRASeed.countServers()
+            if let latest = await IBRASeed.latestVersion(), IBRASeed.isNewer(latest, than: IBRAConfig.version) {
+                newVersion = latest
+                updateText = "يتوفر تحديث جديد \(latest)"
+            }
         }
 
         private func refreshServers() async {
@@ -290,6 +487,29 @@
                 note = "تعذر التحديث: \(error.localizedDescription)"
             }
         }
+
+        private func checkUpdate() async {
+            checkingUpdate = true
+            defer { checkingUpdate = false }
+            guard let latest = await IBRASeed.latestVersion() else {
+                updateText = "تعذر البحث عن تحديث — تأكد من الإنترنت"
+                newVersion = nil
+                return
+            }
+            if IBRASeed.isNewer(latest, than: IBRAConfig.version) {
+                newVersion = latest
+                updateText = "يتوفر تحديث جديد \(latest)"
+            } else {
+                newVersion = nil
+                updateText = "عندك آخر إصدار ✓"
+            }
+        }
+    }
+
+    /// Kept so older references still compile; the app now uses IBRARootView.
+    public struct IBRAHomeView: View {
+        public init() {}
+        public var body: some View { IBRARootView() }
     }
 
     private struct IBRAPowerCard: View {
@@ -319,7 +539,7 @@
                 Text(statusText).font(.title3.weight(.heavy)).foregroundStyle(on ? IBRAConfig.red2 : .white)
                 if on, let since = profile.connectedDate {
                     TimelineView(.periodic(from: .now, by: 1)) { context in
-                        Text(elapsed(since, context.date)).font(.system(.body, design: .monospaced)).foregroundStyle(.secondary)
+                        Text(elapsed(since, context.date)).font(.system(.body, design: .monospaced)).foregroundStyle(IBRAConfig.muted)
                     }
                     .environment(\.layoutDirection, .leftToRight)
                 }
@@ -330,7 +550,10 @@
             .onChange(of: profile.status) { status in
                 if starting {
                     if status.isConnectedStrict { starting = false; onConnected() }
-                    else if status == .disconnected { starting = false }
+                    else if status == .disconnected {
+                        starting = false
+                        note = "ما گدر يتصل — جرّب \"جلب سيرفرات\" وبعدين اتصل مرة ثانية"
+                    }
                 }
             }
         }
@@ -354,6 +577,10 @@
                     if on {
                         try await profile.stop()
                     } else {
+                        guard IBRASeed.hasTunnelExtension else {
+                            note = "محرك الـ VPN مو موجود بهذي النسخة — نصّب بالـ TrollStore أو بحساب مطوّر مدفوع"
+                            return
+                        }
                         try await IBRASeed.ensureProfile()
                         starting = true
                         try await profile.start()
@@ -361,7 +588,12 @@
                     note = nil
                 } catch {
                     starting = false
-                    note = "تعذر الاتصال: \(error.localizedDescription)"
+                    let text = error.localizedDescription
+                    if text.contains("VPN") && (text.contains("not installed") || text.contains("تنزيل") || text.contains("مثبت")) {
+                        note = "iPhone ما لگى محرك الـ VPN — طريقة التوقيع غيّرت التطبيق. نصّب بالـ TrollStore أو بحساب مطوّر مدفوع."
+                    } else {
+                        note = "تعذر الاتصال: \(text)"
+                    }
                 }
             }
         }

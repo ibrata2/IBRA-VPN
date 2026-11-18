@@ -70,6 +70,47 @@ t = t.replace('''        case .dashboard:
             return "power.circle.fill"''', 1)
 open(nav, 'w', encoding='utf-8').write(t)
 
+# Whole iPhone app = IBRA interface (no stock tabs, titles or floating buttons)
+mv = os.path.join(apple, 'SFI', 'MainView.swift')
+t = open(mv, encoding='utf-8').read()
+old = '''    private var mainBody: some View {
+        rootContent'''
+if old not in t: raise SystemExit('rebrand: MainView mainBody anchor not found')
+t = t.replace(old, '''    private var mainBody: some View {
+        IBRARootView()''', 1)
+open(mv, 'w', encoding='utf-8').write(t)
+
+# Find the VPN engine by what it is (packet-tunnel extension), not by a fixed ID —
+# re-signing tools often rename bundle IDs, which made iOS say the VPN app is not installed.
+ac = os.path.join(apple, 'Library', 'Shared', 'AppConfiguration.swift')
+t = open(ac, encoding='utf-8').read()
+old = '''    public static var extensionBundleID: String {
+        "\\(packageName).extension"
+    }'''
+if old not in t: raise SystemExit('rebrand: extensionBundleID anchor not found')
+t = t.replace(old, '''    public static var extensionBundleID: String {
+        if let found = installedTunnelExtensionID { return found }
+        return "\\(packageName).extension"
+    }
+
+    private static let installedTunnelExtensionID: String? = {
+        #if os(iOS)
+            guard let url = Bundle.main.builtInPlugInsURL,
+                  let items = try? FileManager.default.contentsOfDirectory(at: url, includingPropertiesForKeys: nil) else { return nil }
+            for item in items where item.pathExtension == "appex" {
+                if let bundle = Bundle(url: item),
+                   let ext = bundle.object(forInfoDictionaryKey: "NSExtension") as? [String: Any],
+                   (ext["NSExtensionPointIdentifier"] as? String) == "com.apple.networkextension.packet-tunnel",
+                   let id = bundle.bundleIdentifier
+                {
+                    return id
+                }
+            }
+        #endif
+        return nil
+    }()''', 1)
+open(ac, 'w', encoding='utf-8').write(t)
+
 os.makedirs(ent_out, exist_ok=True)
 def plist(app_id, extra=''):
     return f'''<?xml version="1.0" encoding="UTF-8"?>

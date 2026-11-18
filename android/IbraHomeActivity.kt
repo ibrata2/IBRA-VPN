@@ -404,6 +404,13 @@ class IbraHomeActivity : HelperBaseComponentActivity() {
             LinkRow("🌐  كل تطبيقاتي · ibraprogram.netlify.app", SITE_URL, highlight = true)
             LinkRow("✈️  Telegram · ibraprogram", TG_URL)
             LinkRow("🎵  TikTok · ibraprogram", TIKTOK_URL)
+            Text(
+                "⬇️  البحث عن تحديث · v${com.v2ray.ang.BuildConfig.VERSION_NAME}", color = Color.White, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Color(0x10FFFFFF))
+                    .border(1.dp, Color(0x1AFFFFFF), RoundedCornerShape(12.dp))
+                    .clickable { startActivity(Intent(this@IbraHomeActivity, com.v2ray.ang.ui.checkupdate.CheckUpdateActivity::class.java)) }
+                    .padding(vertical = 12.dp)
+            )
         }
     }
 
