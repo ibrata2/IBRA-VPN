@@ -1,7 +1,7 @@
 'use strict';
 // IBRA VPN — main process. برمجة وتطوير ابراهيم الخزرجي
 
-const { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, shell, clipboard, net, session, Notification } = require('electron');
+const { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, shell, clipboard, net, session, Notification, globalShortcut } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const http = require('http');
@@ -850,7 +850,7 @@ const BROWSERS = [
 const expandEnv = p => p.replace(/%([^%]+)%/g, (_m, k) => process.env[k] || process.env[k.toUpperCase()] || '');
 function findBrowser(b) { return b.paths.map(expandEnv).find(p => p && fs.existsSync(p)) || null; }
 
-ipcMain.handle('browsers', () => BROWSERS.map(b => ({ id: b.id, name: b.name, installed: !!findBrowser(b), kind: b.kind })));
+ipcMain.handle('browsers', () => BROWSERS.map(b => ({ id: b.id, name: b.name, installed: !!findBrowser(b), kind: b.kind, auto: b.kind === 'chromium' && !!extInstallerExe(), extDone: (store.extInstalled || []).includes(b.id) })));
 ipcMain.handle('install-extension', (_e, id) => {
   const b = BROWSERS.find(x => x.id === id);
   if (!b) return { ok: false };
@@ -862,6 +862,116 @@ ipcMain.handle('install-extension', (_e, id) => {
   if (exe) { try { spawn(exe, [b.page], { detached: true, stdio: 'ignore', windowsHide: false }).unref(); } catch {} }
   return { ok: true, dir, target, page: b.page, kind: b.kind, found: !!exe };
 });
+
+// ---------------- automatic extension install (same method as IBDM Pro) ----------------
+// A small helper drives the browser by itself: extensions page → developer mode → Load unpacked → our folder.
+// While it works a "don't touch anything" card stays on top of the screen; Esc stops it.
+function extInstallerExe() {
+  const c = [path.join(process.resourcesPath || '', 'tools', 'ibra-ext-installer.exe'), path.join(__dirname, '..', 'tools', 'ext-installer', 'out', 'ibra-ext-installer.exe')];
+  return c.find(p => fs.existsSync(p)) || null;
+}
+const EXT_STEPS = {
+  ar: { open: 'فتح المتصفح على صفحة الإضافات…', type: 'كتابة عنوان صفحة الإضافات…', dev: 'تفعيل «وضع المطوّر»…', load: 'الضغط على «تحميل إضافة غير مُجمَّعة»…', folder: 'اختيار مجلد الإضافة…', wait: 'التأكد من اتصال الإضافة بالبرنامج…' },
+  en: { open: 'Opening the browser extensions page…', type: 'Typing the extensions page address…', dev: 'Turning on Developer mode…', load: 'Pressing “Load unpacked”…', folder: 'Choosing the extension folder…', wait: 'Checking the extension talks to the app…' }
+};
+const EXT_FAIL = {
+  ar: { NO_PAGE: 'ما لگيت صفحة الإضافات أو زر «وضع المطوّر».', NO_LOAD: 'ما لگيت زر «تحميل إضافة غير مُجمَّعة».', NO_DIALOG: 'ما ظهرت نافذة اختيار المجلد.', NO_FOLDER_BOX: 'ما لگيت خانة المجلد بنافذة الاختيار.', NO_DIR: 'مجلد الإضافة مو موجود.', NO_BROWSER: 'المتصفح مو منصّب.', CANCELLED: 'تم الإيقاف.', NO_TOOL: 'أداة التنصيب التلقائي مو موجودة.' },
+  en: { NO_PAGE: 'Could not find the extensions page or the Developer mode switch.', NO_LOAD: 'Could not find “Load unpacked”.', NO_DIALOG: 'The folder dialog did not appear.', NO_FOLDER_BOX: 'Could not find the folder box in the dialog.', NO_DIR: 'Extension folder missing.', NO_BROWSER: 'Browser not installed.', CANCELLED: 'Stopped.', NO_TOOL: 'Automatic install helper missing.' }
+};
+let extJob = null;
+
+function extOverlay() {
+  const o = new BrowserWindow({
+    width: 560, height: 330, frame: false, transparent: true, resizable: false, movable: false, focusable: false,
+    alwaysOnTop: true, skipTaskbar: true, show: false, hasShadow: false, webPreferences: { contextIsolation: true }
+  });
+  o.setAlwaysOnTop(true, 'screen-saver');
+  o.setIgnoreMouseEvents(true);
+  o.loadFile(path.join(__dirname, 'renderer', 'ext-overlay.html'), { query: { lang: store.settings.lang === 'ar' ? 'ar' : 'en' } });
+  o.once('ready-to-show', () => o.showInactive());
+  return o;
+}
+
+function runExtInstaller(b, exe, onStep) {
+  return new Promise(resolve => {
+    const tool = extInstallerExe();
+    if (!tool) return resolve({ ok: false, code: 'NO_TOOL' });
+    const proc = path.basename(exe, '.exe');
+    const child = spawn(tool, [proc, exe, b.page.replace(/\/$/, ''), extensionDir('chromium')], { windowsHide: true });
+    extJob.child = child;
+    let buf = '', result = null;
+    child.stdout.on('data', d => {
+      buf += d.toString('utf8');
+      let i;
+      while ((i = buf.indexOf('\n')) >= 0) {
+        const line = buf.slice(0, i).replace(/^\uFEFF/, '').trim(); buf = buf.slice(i + 1);
+        if (line.startsWith('STEP ')) onStep(line.slice(5).trim());
+        else if (line === 'OK') result = { ok: true };
+        else if (line.startsWith('FAIL ')) { const [code, ...rest] = line.slice(5).split(' '); result = { ok: false, code, detail: rest.join(' ') }; }
+        log(`extension auto-install (${b.id}): ${line}`);
+      }
+    });
+    child.on('error', e => { result = { ok: false, code: 'ERROR', detail: e.message }; });
+    child.on('close', () => resolve(extJob && extJob.cancelled ? { ok: false, code: 'CANCELLED' } : (result || { ok: false, code: 'ERROR' })));
+  });
+}
+
+async function autoInstallExtensions(ids) {
+  if (extJob) return { busy: true };
+  const L = store.settings.lang === 'ar' ? 'ar' : 'en';
+  const list = BROWSERS.filter(b => b.kind === 'chromium' && (!ids || ids === 'all' || ids.includes(b.id)))
+    .map(b => ({ b, exe: findBrowser(b) })).filter(x => x.exe);
+  if (!list.length) return { results: [], none: true };
+  extJob = { cancelled: false, child: null };
+  const overlay = extOverlay();
+  const show = (title, steps) => { try { overlay.webContents.executeJavaScript(`window.ibraSet(${JSON.stringify(title)}, ${JSON.stringify(steps)})`).catch(() => {}); } catch {} };
+  try { globalShortcut.register('Escape', () => { if (extJob) { extJob.cancelled = true; try { extJob.child && extJob.child.kill(); } catch {} } }); } catch {}
+  const results = [];
+  for (const { b, exe } of list) {
+    if (extJob.cancelled) break;
+    const title = L === 'ar' ? `جاري تنصيب الإضافة على ${b.name}` : `Installing the extension on ${b.name}`;
+    const steps = [];
+    show(title, steps);
+    send('ext-progress', { id: b.id, state: 'working' });
+    const started = Date.now();
+    const r = await runExtInstaller(b, exe, step => { steps.push(EXT_STEPS[L][step] || step); show(title, steps); });
+    if (r.ok) {
+      // the extension calls the app as soon as it starts: wait for that to confirm it really runs
+      steps.push(EXT_STEPS[L].wait); show(title, steps);
+      const end = Date.now() + 20000;
+      while (Date.now() < end && bridge.lastContact() < started && !extJob.cancelled) await new Promise(res => setTimeout(res, 500));
+      r.confirmed = bridge.lastContact() >= started;
+    }
+    r.message = r.ok
+      ? (r.confirmed ? (L === 'ar' ? 'تم التنصيب والإضافة متصلة بالبرنامج ✓' : 'Installed and connected ✓') : (L === 'ar' ? 'تم التنصيب. إذا ما ظهرت الأيقونة سكّر المتصفح وافتحه.' : 'Installed. If the icon is missing, restart the browser.'))
+      : ((EXT_FAIL[L][r.code] || r.code) + (L === 'ar' ? ' جرّب الخطوات اليدوية.' : ' Try the manual steps.'));
+    results.push({ id: b.id, name: b.name, ok: r.ok, confirmed: !!r.confirmed, message: r.message });
+    send('ext-progress', { id: b.id, state: r.ok ? 'done' : 'failed', message: r.message });
+  }
+  try { globalShortcut.unregister('Escape'); } catch {}
+  try { overlay.destroy(); } catch {}
+  extJob = null;
+  if (results.some(x => x.ok)) { store.extInstalled = Array.from(new Set([...(store.extInstalled || []), ...results.filter(x => x.ok).map(x => x.id)])); save(); }
+  if (win && !win.isDestroyed()) { win.show(); win.focus(); }
+  return { results };
+}
+ipcMain.handle('auto-install-extension', (_e, ids) => autoInstallExtensions(ids));
+
+function readRegValue(name) {
+  return new Promise(resolve => {
+    if (process.platform !== 'win32') return resolve(null);
+    execFile('reg', ['query', 'HKCU\\Software\\IBRA VPN', '/v', name], { windowsHide: true }, (err, out) => {
+      if (err) return resolve(null);
+      const m = new RegExp(name + '\\s+REG_\\w+\\s+(\\S+)').exec(String(out));
+      resolve(m ? m[1] : null);
+    });
+  });
+}
+function clearRegValue(name) {
+  if (process.platform !== 'win32') return;
+  execFile('reg', ['delete', 'HKCU\\Software\\IBRA VPN', '/v', name, '/f'], { windowsHide: true }, () => {});
+}
+
 ipcMain.handle('check-update', () => checkUpdates(true));
 ipcMain.handle('install-update', () => { if (autoUpdater) { quitting = true; cleanupSync(); autoUpdater.quitAndInstall(false, true); } });
 
@@ -937,6 +1047,14 @@ app.whenReady().then(async () => {
   const byProtocol = handleProtocol(argv);
   if (!byProtocol && (store.settings.autoConnect || argv.includes('--connect') || pending.connect)) setTimeout(connect, 800);
   if (store.settings.autoUpdate) setTimeout(() => checkUpdates(false), 5000);
+  // the installer's "install the browser extension automatically" option (asked once, right after setup)
+  if (await readRegValue('AutoExtension') === '1') {
+    clearRegValue('AutoExtension');
+    setTimeout(async () => {
+      const r = await autoInstallExtensions('all');
+      if (r && r.results && r.results.length) send('ext-auto-result', r);
+    }, 3500);
+  }
 });
 
 app.on('before-quit', () => { quitting = true; cleanupSync(); });

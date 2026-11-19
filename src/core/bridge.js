@@ -5,6 +5,8 @@
 const http = require('http');
 
 const PORTS = [20790, 20791, 20792, 20793, 20794];
+let lastContact = 0; // when a browser extension last called the app (to confirm an automatic install)
+const contacts = {}; // origin -> time
 
 function start({ getStatus, connect, disconnect, log }) {
   const handler = async (req, res) => {
@@ -14,6 +16,7 @@ function start({ getStatus, connect, disconnect, log }) {
     }
     const headers = { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' };
     if (origin) {
+      lastContact = Date.now(); contacts[origin] = lastContact;
       headers['Access-Control-Allow-Origin'] = origin;
       headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS';
       headers['Access-Control-Allow-Headers'] = 'Content-Type';
@@ -49,4 +52,4 @@ function start({ getStatus, connect, disconnect, log }) {
   tryListen();
 }
 
-module.exports = { start, PORTS };
+module.exports = { start, PORTS, lastContact: () => lastContact, contacts: () => ({ ...contacts }) };

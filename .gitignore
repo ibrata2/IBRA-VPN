@@ -2,3 +2,6 @@ node_modules/
 dist/
 /core/
 *.log
+tools/ext-installer/out/
+tools/ext-installer/obj/
+tools/ext-installer/bin/

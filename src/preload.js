@@ -35,6 +35,7 @@ contextBridge.exposeInMainWorld('vpn', {
   openLogs: () => invoke('open-logs'),
   browsers: () => invoke('browsers'),
   installExtension: id => invoke('install-extension', id),
+  autoInstallExtension: ids => invoke('auto-install-extension', ids),
   checkUpdate: () => invoke('check-update'),
   installUpdate: () => invoke('install-update'),
   on

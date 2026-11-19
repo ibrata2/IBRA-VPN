@@ -124,6 +124,9 @@ h3 { font-size: 13px; color: var(--muted); font-weight: 700; margin-bottom: 6px;
 .ext-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 10px; border-radius: 10px; background: var(--glass); border: 1px solid var(--line2); }
 .ext-name { font-weight: 600; font-size: 13px; }
 .ext-name small { color: var(--muted); font-weight: 400; }
+.ext-btns { display: flex; gap: 6px; flex-shrink: 0; }
+.ext-all { width: 100%; margin-bottom: 4px; }
+.ext-ok { color: #2ecc71; }
 #modalText { white-space: pre-line; font-weight: 600; font-size: 13px; line-height: 1.7; }
 
 /* switch */

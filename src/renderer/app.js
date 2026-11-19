@@ -357,19 +357,40 @@ vpn.on('toast', code => toast((T('toasts') || {})[code] || code, 'bad'));
 
 async function renderBrowsers() {
   const list = await vpn.browsers();
-  $('#extList').innerHTML = list.map(b => `
+  const autoable = list.filter(b => b.installed && b.auto);
+  $('#extList').innerHTML = (autoable.length ? `
+    <button class="primary ext-all" data-auto="all">${esc(T('extAutoAll')(autoable.length))}</button>` : '') + list.map(b => `
     <div class="ext-row">
-      <span class="ext-name">${esc(b.name)}${b.installed ? '' : ` <small>· ${esc(T('extMissing'))}</small>`}</span>
-      <button class="${b.installed ? 'primary' : 'ghost'} small" data-ext="${esc(b.id)}">${esc(T('extInstall'))}</button>
+      <span class="ext-name">${esc(b.name)}${b.extDone ? ' <b class="ext-ok">✓</b>' : ''}${b.installed ? '' : ` <small>· ${esc(T('extMissing'))}</small>`}</span>
+      <span class="ext-btns">
+        ${b.installed && b.auto ? `<button class="primary small" data-auto="${esc(b.id)}">${esc(T('extAuto'))}</button>` : ''}
+        <button class="ghost small" data-ext="${esc(b.id)}">${esc(b.installed && b.auto ? T('extManual') : T('extInstall'))}</button>
+      </span>
     </div>`).join('');
 }
+function showExtResults(r) {
+  if (!r || !r.results) return;
+  if (!r.results.length) { toast(T('extNone'), 'bad'); return; }
+  const ok = r.results.every(x => x.ok);
+  const text = (ok ? T('extDoneTitle') : T('extPartTitle')) + '\n\n' + r.results.map(x => (x.ok ? '✓ ' : '✗ ') + x.name + ': ' + x.message).join('\n\n');
+  modal(text, { buttons: [{ label: T('ok'), value: true, cls: 'primary' }] });
+  renderBrowsers();
+}
+async function autoInstall(ids) {
+  const ask = await confirmBox(T('extAutoAsk'));
+  if (!ask) return;
+  showExtResults(await vpn.autoInstallExtension(ids === 'all' ? 'all' : [ids]));
+}
 $('#extList').onclick = async e => {
+  const a = e.target.closest('[data-auto]');
+  if (a) { autoInstall(a.dataset.auto); return; }
   const b = e.target.closest('[data-ext]'); if (!b) return;
   const r = await vpn.installExtension(b.dataset.ext);
   if (!r || !r.ok) return;
   const text = r.kind === 'firefox' ? T('extStepsFirefox')(r.target) : T('extStepsChromium')(r.target).replace('{page}', r.page);
   modal(text, { buttons: [{ label: T('ok'), value: true, cls: 'primary' }] });
 };
+vpn.on('ext-auto-result', showExtResults);
 renderBrowsers();
 
 vpn.on('update', u => {

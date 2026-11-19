@@ -1,7 +1,7 @@
 {
   "name": "ibra-vpn",
   "productName": "IBRA VPN",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "description": "IBRA VPN — فتح المواقع والتطبيقات المحجوبة. برمجة وتطوير ابراهيم الخزرجي",
   "author": "Ibrahim Al-Khazraji (IBRAPROGRAM)",
   "license": "SEE LICENSE IN LICENSE",
@@ -9,7 +9,7 @@
   "scripts": {
     "core": "node scripts/fetch-core.js",
     "start": "electron .",
-    "dist": "node scripts/build-extension.js && node scripts/fetch-core.js win && electron-builder --win nsis --x64",
+    "dist": "node scripts/build-extension.js && dotnet build tools/ext-installer/ExtInstaller.csproj -c Release -o tools/ext-installer/out && node scripts/fetch-core.js win && electron-builder --win nsis --x64",
     "release": "node scripts/fetch-core.js win && electron-builder --win nsis --x64 --publish always"
   },
   "dependencies": {
@@ -51,6 +51,14 @@
         "filter": [
           "chromium/**",
           "firefox/**"
+        ]
+      },
+      {
+        "from": "tools/ext-installer/out",
+        "to": "tools",
+        "filter": [
+          "ibra-ext-installer.exe",
+          "ibra-ext-installer.exe.config"
         ]
       }
     ],

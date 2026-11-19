@@ -20,6 +20,8 @@ jobs:
       - run: npm ci
       - name: Build browser extension
         run: node scripts/build-extension.js
+      - name: Build automatic extension installer
+        run: dotnet build tools/ext-installer/ExtInstaller.csproj -c Release -o tools/ext-installer/out
       - name: Download sing-box engine
         run: node scripts/fetch-core.js win
       - name: Build installer and publish to Releases

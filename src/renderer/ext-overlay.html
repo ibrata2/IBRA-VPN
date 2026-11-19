@@ -1,0 +1,48 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>IBRA VPN</title>
+<style>
+  html, body { margin: 0; background: transparent; overflow: hidden; font-family: "Segoe UI", Tahoma, sans-serif; }
+  .card {
+    margin: 14px; padding: 22px 24px; border-radius: 16px; color: #f4f4f6;
+    background: linear-gradient(160deg, #1b1b20, #101014); border: 2px solid #e3141c;
+    box-shadow: 0 10px 40px rgba(0,0,0,.55);
+  }
+  .head { display: flex; align-items: center; gap: 12px; }
+  .head img { width: 42px; height: 42px; }
+  .title { font-size: 17px; font-weight: 700; }
+  .warn { margin-top: 14px; padding: 10px 12px; border-radius: 10px; background: rgba(227,20,28,.14); color: #ffb3b6; font-weight: 700; font-size: 14px; line-height: 1.6; }
+  .bar { margin-top: 14px; height: 6px; border-radius: 4px; background: #2a2a31; overflow: hidden; position: relative; }
+  .bar i { position: absolute; top: 0; bottom: 0; width: 35%; background: #e3141c; border-radius: 4px; animation: run 1.2s ease-in-out infinite; }
+  @keyframes run { 0% { left: -35%; } 100% { left: 100%; } }
+  ul { margin: 12px 0 0; padding: 0 18px; font-size: 13px; line-height: 1.8; color: #d6d6dc; }
+  .hint { margin-top: 8px; font-size: 11.5px; color: #8b8b95; }
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="head"><img src="../../build/icon.png" onerror="this.style.display='none'"><div class="title" id="t"></div></div>
+  <div class="warn" id="w"></div>
+  <div class="bar"><i></i></div>
+  <ul id="s"></ul>
+  <div class="hint" id="h"></div>
+</div>
+<script>
+  const ar = new URLSearchParams(location.search).get('lang') !== 'en';
+  document.documentElement.dir = ar ? 'rtl' : 'ltr';
+  document.getElementById('w').textContent = ar
+    ? '⚠ لا تضغط على أي شيء ولا تحرّك الماوس لحين انتهاء تنصيب الإضافة (حوالي ١٥ ثانية لكل متصفح)'
+    : '⚠ Do not click or move the mouse until the extension is installed (about 15 seconds per browser)';
+  document.getElementById('h').textContent = ar ? 'للإيقاف اضغط Esc' : 'Press Esc to stop';
+  document.getElementById('t').textContent = ar ? 'تنصيب إضافة IBRA VPN' : 'Installing the IBRA VPN extension';
+  window.ibraSet = (title, steps) => {
+    document.getElementById('t').textContent = title;
+    const ul = document.getElementById('s');
+    ul.innerHTML = '';
+    for (const s of steps) { const li = document.createElement('li'); li.textContent = s; ul.appendChild(li); }
+  };
+</script>
+</body>
+</html>
