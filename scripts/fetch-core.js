@@ -35,7 +35,11 @@ function get(u, dest, n = 0) {
   const x = path.join(require('os').tmpdir(), 'sb-x-' + Date.now());
   fs.mkdirSync(x);
   if (file.endsWith('.zip')) {
-    if (process.platform === 'win32') execSync(`powershell -NoProfile -Command "Expand-Archive -Force '${tmp}' '${x}'"`);
+    if (process.platform === 'win32') {
+      const bsdtar = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'tar.exe');
+      try { execSync(`"${bsdtar}" -xf "${tmp}" -C "${x}"`); }
+      catch (e) { execSync(`powershell -NoProfile -Command "Add-Type -A System.IO.Compression.FileSystem; [IO.Compression.ZipFile]::ExtractToDirectory('${tmp}','${x}')"`); }
+    }
     else execSync(`unzip -q -o "${tmp}" -d "${x}"`);
   } else execSync(`tar xzf "${tmp}" -C "${x}"`);
   const dir = path.join(x, name);
