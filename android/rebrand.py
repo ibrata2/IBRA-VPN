@@ -132,7 +132,17 @@ object IbraSeed {
 ''' % ',\n'.join(f'        "{n}" to "{u}"' for n, u in FREE_SUBS)
 with open(os.path.join(pkg, 'IbraSeed.kt'), 'w', encoding='utf-8') as f: f.write(seed_kt)
 edit(os.path.join(pkg, 'AngApplication.kt'), lambda s: s.replace(
-    '        SettingsManager.initApp(this)\n', '        SettingsManager.initApp(this)\n\n        // IBRA VPN: free server lists\n        IbraSeed.run(this)\n', 1))
+    '        SettingsManager.initApp(this)\n', '        SettingsManager.initApp(this)\n\n        // IBRA VPN: routing files (geosite/geoip) must exist before the first connection —\n        // the original app only copied them when its own main screen opened\n        SettingsManager.initAssets(this, assets)\n\n        // IBRA VPN: free server lists\n        IbraSeed.run(this)\n', 1))
+
+# 7b) "كل السيرفرات" (the original screen) returns to the IBRA home screen: after Connect, and on Back
+def main_activity(s):
+    a = '        BackHandler { moveTaskToBack(false) }'
+    b = '        LauncherManager.startService(this)\n    }'
+    if a not in s or b not in s: raise SystemExit('rebrand: MainActivity anchors not found')
+    s = s.replace(a, '        BackHandler { if (isTaskRoot) moveTaskToBack(false) else finish() }', 1)
+    s = s.replace(b, '        LauncherManager.startService(this)\n        // opened from the IBRA home screen: go back there to see the connection\n        if (!isTaskRoot) finish()\n    }', 1)
+    return s
+edit(os.path.join(pkg, 'ui', 'main', 'MainActivity.kt'), main_activity)
 
 # 8) IBRA home screen as the launcher (the original screen stays as "كل السيرفرات")
 shutil.copy(os.path.join(here, 'IbraHomeActivity.kt'), os.path.join(pkg, 'ui', 'IbraHomeActivity.kt'))

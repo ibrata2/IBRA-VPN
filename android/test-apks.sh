@@ -4,6 +4,7 @@
 APKS="$1"; SHOTS="$2"; PKG=com.ibraprogram.ibravpn
 mkdir -p "$SHOTS"; fail=0
 adb shell settings put global window_animation_scale 0 >/dev/null 2>&1
+adb root >/dev/null 2>&1; sleep 3; adb wait-for-device
 echo "emulator ABIs: $(adb shell getprop ro.product.cpu.abilist)"
 for apk in "$APKS"/*.apk; do
   name=$(basename "$apk" .apk); abi=${name##*_}
@@ -18,6 +19,11 @@ for apk in "$APKS"/*.apk; do
   pid=$(adb shell pidof $PKG | tr -d '\r')
   crash=$(adb logcat -d -b crash | grep -A12 "$PKG" | head -30)
   adb exec-out screencap -p > "$SHOTS/$abi.png"
+  # routing files must be ready from the IBRA screen alone (a missing geosite.dat breaks the first connection)
+  geo=$(adb shell ls /data/user/0/$PKG/app_assets/ 2>&1 | tr -d '\r')
+  if echo "$geo" | grep -qi "permission denied"; then echo "note: cannot read app files on this image ($geo)"
+  elif ! echo "$geo" | grep -q geosite.dat; then echo "MISSING routing files after opening the home screen: $geo"; crash="$crash geosite"
+  else echo "routing files ready: $(echo $geo | tr '\n' ' ')"; fi
   # also open the full server list screen to make sure it works too
   adb shell am start -n $PKG/com.v2ray.ang.ui.main.MainActivity >/dev/null; sleep 6
   pid2=$(adb shell pidof $PKG | tr -d '\r')
