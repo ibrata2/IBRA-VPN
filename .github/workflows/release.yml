@@ -18,6 +18,8 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
+      - name: Build browser extension
+        run: node scripts/build-extension.js
       - name: Download sing-box engine
         run: node scripts/fetch-core.js win
       - name: Build installer and publish to Releases

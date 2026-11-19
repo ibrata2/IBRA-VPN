@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<title>IBRA VPN</title>
+<link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <header>
+    <img src="icon48.png" alt="">
+    <span class="brand">IBRA <b>VPN</b></span>
+  </header>
+
+  <main id="main">
+    <button id="power" class="power" aria-label="اتصال">
+      <svg viewBox="0 0 24 24"><path d="M12 3v8"/><path d="M6.2 6.6a8 8 0 1 0 11.6 0"/></svg>
+    </button>
+    <div id="status" class="status">جاري الفحص…</div>
+    <div id="detail" class="detail"></div>
+    <div id="mode" class="mode"></div>
+
+    <div id="noapp" class="noapp" hidden>
+      <p>برنامج IBRA VPN مو شغال على الحاسبة.</p>
+      <button id="launch" class="btn">تشغيل البرنامج والاتصال</button>
+      <small>إذا ما اشتغل، افتح برنامج IBRA VPN من سطح المكتب.</small>
+    </div>
+  </main>
+
+  <footer>
+    <div class="credit">برمجة وتطوير ابراهيم الخزرجي</div>
+    <a class="link site" href="https://ibraprogram.netlify.app/" target="_blank">🌐 كل تطبيقاتي · ibraprogram.netlify.app</a>
+    <div class="row">
+      <a class="link" href="https://t.me/ibraprogram" target="_blank">Telegram</a>
+      <a class="link" href="https://www.tiktok.com/@ibraprogram" target="_blank">TikTok</a>
+    </div>
+  </footer>
+<script src="popup.js"></script>
+</body>
+</html>

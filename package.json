@@ -1,7 +1,7 @@
 {
   "name": "ibra-vpn",
   "productName": "IBRA VPN",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "IBRA VPN — فتح المواقع والتطبيقات المحجوبة. برمجة وتطوير ابراهيم الخزرجي",
   "author": "Ibrahim Al-Khazraji (IBRAPROGRAM)",
   "license": "SEE LICENSE IN LICENSE",
@@ -9,7 +9,7 @@
   "scripts": {
     "core": "node scripts/fetch-core.js",
     "start": "electron .",
-    "dist": "node scripts/fetch-core.js win && electron-builder --win nsis --x64",
+    "dist": "node scripts/build-extension.js && node scripts/fetch-core.js win && electron-builder --win nsis --x64",
     "release": "node scripts/fetch-core.js win && electron-builder --win nsis --x64 --publish always"
   },
   "dependencies": {
@@ -43,6 +43,14 @@
           "libcronet.dll",
           "LICENSE",
           "rules/*.srs"
+        ]
+      },
+      {
+        "from": "extension",
+        "to": "extension",
+        "filter": [
+          "chromium/**",
+          "firefox/**"
         ]
       }
     ],

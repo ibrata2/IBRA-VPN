@@ -12,6 +12,8 @@ const { parseLink, parseMany, isSubscriptionUrl } = require('./core/links');
 const { buildConfig, buildMultiTestConfig } = require('./core/config');
 const warp = require('./core/warp');
 const sysproxy = require('./core/sysproxy');
+const elevation = require('./core/elevation');
+const bridge = require('./core/bridge');
 
 let autoUpdater = null;
 try { autoUpdater = require('electron-updater').autoUpdater; } catch {}
@@ -19,7 +21,14 @@ try { autoUpdater = require('electron-updater').autoUpdater; } catch {}
 const APP_ID = 'com.ibraprogram.ibravpn';
 app.setAppUserModelId(APP_ID);
 
-if (!app.requestSingleInstanceLock()) { app.quit(); process.exit(0); }
+// An elevated copy started by the admin task may arrive while the normal copy is still closing — wait for it.
+const ELEVATED_LAUNCH = process.argv.includes('--elevated') || process.argv.includes('--enable-admin');
+let gotLock = app.requestSingleInstanceLock();
+if (!gotLock && ELEVATED_LAUNCH) {
+  const sleeper = new Int32Array(new SharedArrayBuffer(4));
+  for (let i = 0; i < 25 && !gotLock; i++) { Atomics.wait(sleeper, 0, 0, 250); gotLock = app.requestSingleInstanceLock(); }
+}
+if (!gotLock) { app.quit(); process.exit(0); }
 
 const DATA = app.getPath('userData');
 const STORE_FILE = path.join(DATA, 'ibra-vpn.json');
@@ -37,8 +46,9 @@ const DEFAULTS = {
   settings: {
     lang: 'ar', theme: 'red', mode: 'proxy', routing: 'global', blockAds: false, dns: 'cloudflare',
     mixedPort: 20808, apiPort: 20809, socialDirect: true, autoStart: false, autoConnect: false, startHidden: false,
-    closeToTray: true, autoUpdate: true
+    closeToTray: true, autoUpdate: true, alwaysAdmin: false
   },
+  appliedInstallMode: null,
   lastProxyPort: null
 };
 
@@ -126,7 +136,7 @@ function createTray() {
 }
 function showWindow() { if (!win || win.isDestroyed()) createWindow(); win.show(); win.focus(); }
 
-app.on('second-instance', showWindow);
+app.on('second-instance', (_e, argv) => { if (!handleProtocol(argv)) showWindow(); });
 
 // ---------------- core process ----------------
 function corePath() {
@@ -157,6 +167,66 @@ function relaunchAsAdmin() {
   execFile('powershell.exe', ['-NoProfile', '-Command', `Start-Process -FilePath '${exe}' -ArgumentList ${args} -Verb RunAs`], { windowsHide: true }, err => {
     if (!err) { quitting = true; cleanupSync(); app.exit(0); }
   });
+}
+
+// Arguments handed from the normal copy to the elevated copy (the admin task always starts it with --elevated only).
+const PENDING_FILE = path.join(DATA, 'pending-launch.json');
+function writePending(obj) { try { fs.writeFileSync(PENDING_FILE, JSON.stringify(Object.assign({ at: Date.now() }, obj))); } catch {} }
+function readPending() {
+  try {
+    const j = JSON.parse(fs.readFileSync(PENDING_FILE, 'utf8'));
+    fs.unlinkSync(PENDING_FILE);
+    return Date.now() - (j.at || 0) < 60000 ? j : {};
+  } catch { return {}; }
+}
+
+/** Restart elevated: silently through the admin task if it exists, otherwise with one UAC prompt. */
+function elevateAndRestart(pending) {
+  return new Promise(async resolve => {
+    if (store.settings.alwaysAdmin) {
+      writePending(pending);
+      if (await elevation.runTask()) { quitting = true; cleanupSync(); app.exit(0); return resolve(true); }
+    }
+    const exe = process.execPath;
+    const extra = pending.connect ? ", '--connect'" : '';
+    const args = process.defaultApp ? `'${path.resolve(process.argv[1])}'${extra}` : `'--elevated'${extra}`;
+    execFile('powershell.exe', ['-NoProfile', '-Command', `Start-Process -FilePath '${exe}' -ArgumentList ${args} -Verb RunAs`], { windowsHide: true }, err => {
+      if (err) return resolve(false); // UAC cancelled
+      quitting = true; cleanupSync(); app.exit(0); resolve(true);
+    });
+  });
+}
+
+async function setAlwaysAdmin(on) {
+  if (process.platform !== 'win32') return { ok: false };
+  if (!on) {
+    await elevation.removeTask();
+    store.settings.alwaysAdmin = false; save();
+    return { ok: true };
+  }
+  if (await isAdmin()) {
+    const ok = await elevation.registerTask(process.execPath);
+    store.settings.alwaysAdmin = ok; save();
+    return { ok };
+  }
+  // one UAC approval: the elevated copy registers the task and stays open elevated
+  return new Promise(resolve => {
+    execFile('powershell.exe', ['-NoProfile', '-Command', `Start-Process -FilePath '${process.execPath}' -ArgumentList '--enable-admin' -Verb RunAs`], { windowsHide: true }, err => {
+      if (err) return resolve({ ok: false, cancelled: true });
+      quitting = true; cleanupSync(); app.exit(0); resolve({ ok: true });
+    });
+  });
+}
+
+// ibravpn://connect | disconnect | open — used by the browser extension to start the app
+function handleProtocol(argv) {
+  const url = (argv || []).find(a => /^ibravpn:\/\//i.test(a));
+  if (!url) return false;
+  const action = url.replace(/^ibravpn:\/\//i, '').replace(/\/.*$/, '').toLowerCase();
+  if (action === 'connect') setTimeout(connect, 600);
+  else if (action === 'disconnect') disconnect();
+  else showWindow();
+  return true;
 }
 
 function portFree(port) {
@@ -214,7 +284,10 @@ async function connect() {
     const server = currentServer();
     if (!server) throw new Error('NO_SERVER');
     if (server.protocol === 'mtproto') throw new Error('MTPROTO_ONLY_TELEGRAM');
-    if (s.mode === 'tun' && !(await isAdmin())) throw new Error('NEED_ADMIN');
+    if (s.mode === 'tun' && !(await isAdmin())) {
+      if (process.platform === 'win32' && app.isPackaged && await elevateAndRestart({ connect: true })) return;
+      throw new Error('NEED_ADMIN');
+    }
     if (!fs.existsSync(corePath())) throw new Error('CORE_MISSING');
 
     state.status = 'connecting'; state.server = { id: server.id, name: server.name, protocol: server.protocol }; pushState();
@@ -734,8 +807,14 @@ ipcMain.handle('warp-endpoint', async (_e, ep) => {
 });
 
 ipcMain.handle('settings', async (_e, patch) => {
+  patch = Object.assign({}, patch || {});
+  if ('alwaysAdmin' in patch) {
+    const r = await setAlwaysAdmin(!!patch.alwaysAdmin);
+    delete patch.alwaysAdmin;
+    if (!r.ok) send('toast', r.cancelled ? 'ADMIN_CANCELLED' : 'ADMIN_FAILED');
+  }
   const before = Object.assign({}, store.settings);
-  Object.assign(store.settings, patch || {});
+  Object.assign(store.settings, patch);
   save();
   if ('autoStart' in (patch || {})) applyAutoStart();
   const needsReconnect = ['mode', 'routing', 'blockAds', 'dns', 'socialDirect'].some(k => k in (patch || {}) && before[k] !== store.settings[k]);
@@ -746,6 +825,43 @@ ipcMain.handle('settings', async (_e, patch) => {
 
 ipcMain.handle('open', (_e, url) => { if (/^(https?:|tg:)/.test(url)) shell.openExternal(url); });
 ipcMain.handle('open-logs', () => shell.openPath(RUN_DIR));
+
+// ---------------- browser extension helper ----------------
+function extensionDir(kind) {
+  const c = [path.join(process.resourcesPath || '', 'extension', kind), path.join(__dirname, '..', 'extension', kind)];
+  return c.find(p => fs.existsSync(p)) || c[1];
+}
+const BROWSERS = [
+  { id: 'chrome', name: 'Google Chrome', page: 'chrome://extensions/', kind: 'chromium',
+    paths: ['%ProgramFiles%\\Google\\Chrome\\Application\\chrome.exe', '%ProgramFiles(x86)%\\Google\\Chrome\\Application\\chrome.exe', '%LocalAppData%\\Google\\Chrome\\Application\\chrome.exe'] },
+  { id: 'edge', name: 'Microsoft Edge', page: 'edge://extensions/', kind: 'chromium',
+    paths: ['%ProgramFiles(x86)%\\Microsoft\\Edge\\Application\\msedge.exe', '%ProgramFiles%\\Microsoft\\Edge\\Application\\msedge.exe'] },
+  { id: 'brave', name: 'Brave', page: 'brave://extensions/', kind: 'chromium',
+    paths: ['%ProgramFiles%\\BraveSoftware\\Brave-Browser\\Application\\brave.exe', '%LocalAppData%\\BraveSoftware\\Brave-Browser\\Application\\brave.exe'] },
+  { id: 'opera', name: 'Opera', page: 'opera://extensions/', kind: 'chromium',
+    paths: ['%LocalAppData%\\Programs\\Opera\\opera.exe', '%LocalAppData%\\Programs\\Opera GX\\opera.exe', '%ProgramFiles%\\Opera\\opera.exe'] },
+  { id: 'vivaldi', name: 'Vivaldi', page: 'vivaldi://extensions/', kind: 'chromium',
+    paths: ['%LocalAppData%\\Vivaldi\\Application\\vivaldi.exe', '%ProgramFiles%\\Vivaldi\\Application\\vivaldi.exe'] },
+  { id: 'yandex', name: 'Yandex', page: 'browser://extensions/', kind: 'chromium',
+    paths: ['%LocalAppData%\\Yandex\\YandexBrowser\\Application\\browser.exe'] },
+  { id: 'firefox', name: 'Firefox', page: 'about:debugging#/runtime/this-firefox', kind: 'firefox',
+    paths: ['%ProgramFiles%\\Mozilla Firefox\\firefox.exe', '%ProgramFiles(x86)%\\Mozilla Firefox\\firefox.exe'] }
+];
+const expandEnv = p => p.replace(/%([^%]+)%/g, (_m, k) => process.env[k] || process.env[k.toUpperCase()] || '');
+function findBrowser(b) { return b.paths.map(expandEnv).find(p => p && fs.existsSync(p)) || null; }
+
+ipcMain.handle('browsers', () => BROWSERS.map(b => ({ id: b.id, name: b.name, installed: !!findBrowser(b), kind: b.kind })));
+ipcMain.handle('install-extension', (_e, id) => {
+  const b = BROWSERS.find(x => x.id === id);
+  if (!b) return { ok: false };
+  const dir = extensionDir(b.kind);
+  const target = b.kind === 'firefox' ? path.join(dir, 'manifest.json') : dir;
+  clipboard.writeText(target);
+  shell.openPath(dir);
+  const exe = findBrowser(b);
+  if (exe) { try { spawn(exe, [b.page], { detached: true, stdio: 'ignore', windowsHide: false }).unref(); } catch {} }
+  return { ok: true, dir, target, page: b.page, kind: b.kind, found: !!exe };
+});
 ipcMain.handle('check-update', () => checkUpdates(true));
 ipcMain.handle('install-update', () => { if (autoUpdater) { quitting = true; cleanupSync(); autoUpdater.quitAndInstall(false, true); } });
 
@@ -769,14 +885,57 @@ if (autoUpdater) {
 }
 
 // ---------------- lifecycle ----------------
+function readInstallMode() {
+  return new Promise(resolve => {
+    if (process.platform !== 'win32') return resolve(null);
+    execFile('reg', ['query', 'HKCU\\Software\\IBRA VPN', '/v', 'InstallMode'], { windowsHide: true }, (err, out) => {
+      if (err) return resolve(null);
+      const m = /InstallMode\s+REG_SZ\s+(\w+)/.exec(String(out));
+      resolve(m ? m[1].toLowerCase() : null);
+    });
+  });
+}
+
 app.whenReady().then(async () => {
+  const argv = process.argv.slice();
+  // "always as administrator": hand over to the elevated copy without a UAC prompt
+  if (process.platform === 'win32' && app.isPackaged && store.settings.alwaysAdmin && !ELEVATED_LAUNCH && !(await isAdmin())) {
+    writePending({ hidden: argv.includes('--hidden'), connect: argv.includes('--connect'), url: argv.find(a => /^ibravpn:/i.test(a)) || null });
+    if (await elevation.runTask()) { app.exit(0); return; }
+  }
+  if (argv.includes('--enable-admin') && await isAdmin()) {
+    store.settings.alwaysAdmin = await elevation.registerTask(process.execPath); save();
+  }
+  const pending = argv.includes('--elevated') ? readPending() : {};
+  if (pending.url) argv.push(pending.url);
+
+  // installer choice: full (whole PC) or browsers only
+  const installMode = await readInstallMode();
+  if (installMode && installMode !== store.appliedInstallMode) {
+    if (installMode === 'browser') store.settings.mode = 'browser';
+    else if (store.settings.mode === 'browser') store.settings.mode = 'proxy';
+    store.appliedInstallMode = installMode; save();
+  }
+
   // a crash last time may have left our system proxy on
   if (store.lastProxyPort) { await sysproxy.disable(store.lastProxyPort).catch(() => {}); store.lastProxyPort = null; save(); }
-  const hidden = process.argv.includes('--hidden') || store.settings.startHidden;
+  if (app.isPackaged) { try { app.setAsDefaultProtocolClient('ibravpn'); } catch {} }
+  bridge.start({
+    getStatus: () => ({
+      app: 'IBRA VPN', version: app.getVersion(), status: state.status, mode: store.settings.mode,
+      port: state.status === 'connected' ? state.mixedPort : null,
+      server: state.server ? state.server.name : null, ip: state.ip && !state.ip.failed ? state.ip : null
+    }),
+    connect: async () => { await connect(); },
+    disconnect: async () => { await disconnect(); },
+    log
+  });
+  const hidden = argv.includes('--hidden') || pending.hidden || store.settings.startHidden || argv.some(a => /^ibravpn:\/\/(connect|disconnect)/i.test(a));
   createWindow(!hidden);
   createTray();
   applyAutoStart();
-  if (store.settings.autoConnect || process.argv.includes('--connect')) setTimeout(connect, 800);
+  const byProtocol = handleProtocol(argv);
+  if (!byProtocol && (store.settings.autoConnect || argv.includes('--connect') || pending.connect)) setTimeout(connect, 800);
   if (store.settings.autoUpdate) setTimeout(() => checkUpdates(false), 5000);
 });
 

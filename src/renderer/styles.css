@@ -116,6 +116,16 @@ h3 { font-size: 13px; color: var(--muted); font-weight: 700; margin-bottom: 6px;
 .qrow + .qrow { border-top: 1px solid var(--line2); }
 .qrow > span { font-weight: 600; font-size: 13px; }
 
+/* modes & extensions */
+#modeSeg button { padding: 4px 7px; }
+.mode-hint { display: block; color: var(--muted); font-size: 11px; line-height: 1.5; padding: 0 0 8px; }
+.ext-hint { margin: 0 0 6px; }
+.ext-list { display: flex; flex-direction: column; gap: 6px; padding-bottom: 6px; }
+.ext-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 10px; border-radius: 10px; background: var(--glass); border: 1px solid var(--line2); }
+.ext-name { font-weight: 600; font-size: 13px; }
+.ext-name small { color: var(--muted); font-weight: 400; }
+#modalText { white-space: pre-line; font-weight: 600; font-size: 13px; line-height: 1.7; }
+
 /* switch */
 .switch-row { cursor: pointer; }
 .switch-row input { display: none; }

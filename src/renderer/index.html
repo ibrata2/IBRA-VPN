@@ -59,8 +59,9 @@
       <div class="quick">
         <div class="qrow">
           <span data-i="modeLabel"></span>
-          <div class="mini-seg" id="modeSeg"><button data-v="proxy" data-i="modeProxy"></button><button data-v="tun" data-i="modeTun"></button></div>
+          <div class="mini-seg" id="modeSeg"><button data-v="proxy" data-i="modeProxy"></button><button data-v="tun" data-i="modeTun"></button><button data-v="browser" data-i="modeBrowser"></button></div>
         </div>
+        <small class="mode-hint" id="modeHint"></small>
         <div class="qrow">
           <span data-i="routeLabel"></span>
           <div class="mini-seg" id="routeSeg"><button data-v="global" data-i="routeGlobal"></button><button data-v="smart" data-i="routeSmart"></button></div>
@@ -124,7 +125,14 @@
         <label class="field switch-row"><span data-i="startHidden"></span><input type="checkbox" data-set="startHidden"><i class="switch"></i></label>
         <label class="field switch-row"><span data-i="closeToTray"></span><input type="checkbox" data-set="closeToTray"><i class="switch"></i></label>
         <label class="field switch-row"><span data-i="autoUpdate"></span><input type="checkbox" data-set="autoUpdate"><i class="switch"></i></label>
+        <label class="field switch-row"><span><span data-i="alwaysAdmin"></span><small class="qhint" data-i="alwaysAdminHint"></small></span><input type="checkbox" data-set="alwaysAdmin"><i class="switch"></i></label>
         <div class="field"><span id="updText" data-i="updates"></span><button class="ghost small" id="updBtn" data-i="checkNow"></button></div>
+      </div>
+
+      <div class="group">
+        <h3 data-i="extTitle"></h3>
+        <small class="hint ext-hint" data-i="extHint"></small>
+        <div class="ext-list" id="extList"></div>
       </div>
 
       <div class="group">

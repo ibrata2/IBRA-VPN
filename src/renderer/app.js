@@ -131,6 +131,7 @@ function renderHome() {
 
   $('#homeFetch').hidden = !(S.engine === 'server' && !S.servers.some(x => x.protocol !== 'mtproto') && st.status === 'disconnected');
   setSeg('#modeSeg', S.settings.mode);
+  $('#modeHint').textContent = (T('modeHints') || {})[S.settings.mode] || '';
   setSeg('#routeSeg', S.settings.routing);
   $('#routeSeg').classList.toggle('disabled', S.engine === 'bypass');
   $('#adsToggle').checked = !!S.settings.blockAds;
@@ -352,6 +353,25 @@ vpn.on('log', l => {
   logs.push(l); if (logs.length > 300) logs.shift();
   const el = $('#logs'); el.textContent = logs.join('\n'); el.scrollTop = el.scrollHeight;
 });
+vpn.on('toast', code => toast((T('toasts') || {})[code] || code, 'bad'));
+
+async function renderBrowsers() {
+  const list = await vpn.browsers();
+  $('#extList').innerHTML = list.map(b => `
+    <div class="ext-row">
+      <span class="ext-name">${esc(b.name)}${b.installed ? '' : ` <small>· ${esc(T('extMissing'))}</small>`}</span>
+      <button class="${b.installed ? 'primary' : 'ghost'} small" data-ext="${esc(b.id)}">${esc(T('extInstall'))}</button>
+    </div>`).join('');
+}
+$('#extList').onclick = async e => {
+  const b = e.target.closest('[data-ext]'); if (!b) return;
+  const r = await vpn.installExtension(b.dataset.ext);
+  if (!r || !r.ok) return;
+  const text = r.kind === 'firefox' ? T('extStepsFirefox')(r.target) : T('extStepsChromium')(r.target).replace('{page}', r.page);
+  modal(text, { buttons: [{ label: T('ok'), value: true, cls: 'primary' }] });
+};
+renderBrowsers();
+
 vpn.on('update', u => {
   const el = $('#updText');
   if (u.status === 'none') el.textContent = T('updNone');

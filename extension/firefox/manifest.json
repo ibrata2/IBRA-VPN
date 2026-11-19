@@ -1,0 +1,37 @@
+{
+  "manifest_version": 2,
+  "name": "IBRA VPN",
+  "version": "1.0.5",
+  "description": "IBRA VPN — افتح المواقع المحجوبة داخل المتصفح. برمجة وتطوير ابراهيم الخزرجي",
+  "icons": {
+    "16": "icon16.png",
+    "32": "icon32.png",
+    "48": "icon48.png",
+    "128": "icon128.png"
+  },
+  "browser_action": {
+    "default_title": "IBRA VPN",
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icon16.png",
+      "32": "icon32.png"
+    }
+  },
+  "background": {
+    "scripts": [
+      "background.js"
+    ]
+  },
+  "permissions": [
+    "proxy",
+    "<all_urls>",
+    "http://127.0.0.1/*"
+  ],
+  "homepage_url": "https://ibraprogram.netlify.app/",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "ibravpn@ibraprogram",
+      "strict_min_version": "91.0"
+    }
+  }
+}
