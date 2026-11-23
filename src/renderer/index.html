@@ -2,7 +2,7 @@
 <html lang="ar" dir="rtl" data-theme="red">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; font-src 'self'; script-src 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: https:; connect-src 'self' https://ibraprogram.netlify.app; style-src 'self' 'unsafe-inline'; font-src 'self'; script-src 'self'">
 <title>IBRA VPN</title>
 <link rel="stylesheet" href="styles.css">
 </head>
@@ -55,6 +55,9 @@
         <div><div id="ipCountry" data-i="ipUnknown"></div><small id="ipAddr">—</small></div>
         <button class="ghost small" id="ipRefresh" data-i="refresh"></button>
       </div>
+
+      <!-- IBRA STORE: latest programs and games -->
+      <div id="ibraStoreSlider" hidden></div>
 
       <div class="quick">
         <div class="qrow">
@@ -180,5 +183,6 @@
 </div>
 <script src="i18n.js"></script>
 <script src="app.js"></script>
+<script src="ibra-store-slider.js"></script>
 </body>
 </html>

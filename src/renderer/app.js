@@ -51,8 +51,10 @@ const confirmBox = text => modal(text, { buttons: [{ label: T('cancel'), value: 
 
 /* ---------------- i18n & theme ---------------- */
 function applyLang() {
+  const langChanged = document.documentElement.lang && document.documentElement.lang !== (S.settings.lang || 'ar');
   lang = S.settings.lang || 'ar';
   document.documentElement.lang = lang;
+  if (langChanged && window.IbraStoreSlider) window.IbraStoreSlider.reload();
   document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';
   $$('[data-i]').forEach(el => { const v = T(el.dataset.i); if (typeof v === 'string') el.textContent = v; });
   $$('[data-ip]').forEach(el => { el.placeholder = T(el.dataset.ip); });
