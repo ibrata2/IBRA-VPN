@@ -104,6 +104,8 @@ function createWindow(show = true) {
   win.setMenuBarVisibility(false);
   win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
   win.once('ready-to-show', () => { if (show) win.show(); });
+  win.on('maximize', () => send('maximized', true));
+  win.on('unmaximize', () => send('maximized', false));
   win.on('close', e => {
     if (!quitting && store.settings.closeToTray) { e.preventDefault(); win.hide(); }
   });
@@ -679,6 +681,7 @@ ipcMain.handle('init', () => publicStore());
 ipcMain.handle('win', (_e, act) => {
   if (!win) return;
   if (act === 'min') win.minimize();
+  else if (act === 'max') { if (win.isMaximized()) win.unmaximize(); else win.maximize(); }
   else if (act === 'close') win.close();
   else if (act === 'quit') { quitting = true; app.quit(); }
 });

@@ -210,6 +210,7 @@ function render() { applyTheme(); applyLang(); renderHome(); renderServers(); re
 
 /* ---------------- events ---------------- */
 $$('[data-win]').forEach(b => (b.onclick = () => vpn.win(b.dataset.win)));
+vpn.on('maximized', m => document.querySelector('.app').classList.toggle('maximized', !!m));
 
 function go(page) {
   $$('.tabs button').forEach(b => b.classList.toggle('active', b.dataset.page === page));
